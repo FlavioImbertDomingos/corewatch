@@ -1,0 +1,44 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+scrape_configs:
+  # The Db2 exporter. One exporter can watch many databases.
+  - job_name: corewatch-db2
+    static_configs:
+      - targets: ["corewatch:9953"]
+
+  # Linux hosts: node_exporter plus the corewatch textfile collectors.
+  - job_name: linux
+    static_configs:
+      - targets: ["node-exporter:9100"]
+        labels: { os: linux }
+
+  # AIX hosts: textfile_server.py (or node_exporter where it is installed).
+  # Uncomment and list your hosts.
+  # - job_name: aix
+  #   static_configs:
+  #     - targets: ["aix-prod-01:9954"]
+  #       labels: { os: aix }
+
+  # Is the Db2 port reachable from outside the database server?
+  - job_name: db2-port
+    metrics_path: /probe
+    params: { module: [tcp_connect] }
+    static_configs:
+      - targets: ["db2:50000"]
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox:9115

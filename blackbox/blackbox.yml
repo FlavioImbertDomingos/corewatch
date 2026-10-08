@@ -1,0 +1,10 @@
+modules:
+  tcp_connect:
+    prober: tcp
+    timeout: 5s
+  # Certificate expiry for any TLS endpoint (a Db2 SSL port, an API listener).
+  tls_connect:
+    prober: tcp
+    timeout: 5s
+    tcp:
+      tls: true

@@ -1,0 +1,14 @@
+#!/bin/sh
+if [ "$1" = "-o" ]; then echo datavg; echo rootvg; exit 0; fi
+stale=0; [ "$1" = "datavg" ] && stale=12
+cat <<OUT
+VOLUME GROUP:       $1                   VG IDENTIFIER:  00f6050a00004c000000015ab1c2d3e4
+VG STATE:           active                   PP SIZE:        64 megabyte(s)
+VG PERMISSION:      read/write               TOTAL PPs:      799 (51136 megabytes)
+MAX LVs:            256                      FREE PPs:       431 (27584 megabytes)
+LVs:                13                       USED PPs:       368 (23552 megabytes)
+OPEN LVs:           12                       QUORUM:         2 (Enabled)
+TOTAL PVs:          1                        VG DESCRIPTORS: 2
+STALE PVs:          0                        STALE PPs:      $stale
+ACTIVE PVs:         1                        AUTO ON:        yes
+OUT

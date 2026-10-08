@@ -1,0 +1,23 @@
+# corewatch-db2 configuration
+listen:
+  address: 0.0.0.0
+  port: 9953
+
+# How long results are reused. Prometheus can scrape every 15s without the
+# exporter querying Db2 more often than this.
+cache_seconds: 30
+
+# Queries that are off by default. diag_history reads db2diag.log through SQL
+# (PD_GET_DIAG_HIST) and can be slow on a large log.
+optional_queries: []
+
+databases:
+  - name: CORE
+    host: db2-prod-01.example.internal
+    port: 50000
+    user: corewatch            # a dedicated read-only user; see docs/privileges.sql
+    password_env: COREWATCH_DB2_PASSWORD   # or password_file: /run/secrets/db2
+    ssl: false
+    labels:                    # copied onto every metric from this database
+      client: example-cu
+      environment: production

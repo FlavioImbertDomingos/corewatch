@@ -1,0 +1,7 @@
+#!/bin/sh
+cat <<'OUT'
+
+ID  STATE LABEL      INSTALL TIME      UPDATED BY ABSTRACT
+=== ===== ========== ================= ========== ======================================
+1    S    IJ40123s1a 09/12/26 02:10:11            Fix for a kernel memory leak
+OUT

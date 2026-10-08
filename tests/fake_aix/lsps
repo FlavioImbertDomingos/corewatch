@@ -1,0 +1,5 @@
+#!/bin/sh
+cat <<'OUT'
+Total Paging Space   Percent Used
+      2048MB               3%
+OUT

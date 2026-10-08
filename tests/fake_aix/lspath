@@ -1,0 +1,7 @@
+#!/bin/sh
+cat <<'OUT'
+Enabled hdisk0 vscsi0
+Enabled hdisk0 vscsi1
+Enabled hdisk1 fscsi0
+Failed  hdisk1 fscsi1
+OUT

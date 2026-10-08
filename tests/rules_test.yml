@@ -1,0 +1,123 @@
+# promtool test rules tests/rules_test.yml
+rule_files:
+  - ../prometheus/rules/db2.yml
+  - ../prometheus/rules/hosts.yml
+  - ../prometheus/rules/jobs.yml
+
+evaluation_interval: 1m
+
+tests:
+  - name: database down pages after one minute
+    interval: 1m
+    input_series:
+      - series: 'db2_up{database="CORE", db_host="db1"}'
+        values: "1 0 0 0"
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: Db2Down
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: Db2Down
+        exp_alerts:
+          - exp_labels: { severity: page, layer: db2, database: CORE, db_host: db1 }
+            exp_annotations:
+              summary: "Db2 database CORE on db1 is not answering"
+              runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#db2down"
+
+  - name: log space warns at 70 percent and pages at 85
+    interval: 1m
+    input_series:
+      - series: 'db2_log_utilization_ratio{database="CORE"}'
+        values: "0.5x5 0.75x10 0.9x10"
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: Db2LogSpaceHigh
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: Db2LogSpaceCritical
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: Db2LogSpaceCritical
+        exp_alerts:
+          - exp_labels: { severity: page, layer: db2, database: CORE }
+            exp_annotations:
+              summary: "Transaction log is 90% full on CORE; posting stops at 100%"
+              runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#db2logspace"
+
+  - name: a full auto-resize table space does not alert, a fixed one does
+    interval: 1m
+    input_series:
+      - series: 'db2_tablespace_utilization_ratio{database="CORE", tablespace="AUTO"}'
+        values: "0.96x20"
+      - series: 'db2_tablespace_auto_resize{database="CORE", tablespace="AUTO"}'
+        values: "1x20"
+      - series: 'db2_tablespace_utilization_ratio{database="CORE", tablespace="FIXED"}'
+        values: "0.96x20"
+      - series: 'db2_tablespace_auto_resize{database="CORE", tablespace="FIXED"}'
+        values: "0x20"
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: Db2TablespaceNearlyFull
+        exp_alerts:
+          - exp_labels: { severity: ticket, layer: db2, database: CORE, tablespace: FIXED }
+            exp_annotations:
+              summary: "Table space FIXED is 96% full on CORE"
+              runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#db2tablespace"
+
+  - name: a job that never runs again is caught
+    interval: 1m
+    input_series:
+      - series: 'corewatch_job_last_success_seconds{job_name="nightly", instance="h1"}'
+        values: "0x200"
+      - series: 'corewatch_job_max_age_seconds{job_name="nightly", instance="h1"}'
+        values: "3600x200"
+      - series: 'corewatch_job_last_success_seconds{job_name="adhoc", instance="h1"}'
+        values: "0x200"
+      - series: 'corewatch_job_max_age_seconds{job_name="adhoc", instance="h1"}'
+        values: "0x200"
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: JobOverdue
+        exp_alerts: []
+      - eval_time: 90m
+        alertname: JobOverdue
+        exp_alerts:
+          - exp_labels: { severity: page, layer: jobs, job_name: nightly, instance: h1 }
+            exp_annotations:
+              summary: "Job nightly on h1 has not succeeded within its allowed window"
+              runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#joboverdue"
+
+  - name: a failed job pages, a running job does not
+    interval: 1m
+    input_series:
+      - series: 'corewatch_job_last_exit_code{job_name="posting", instance="h1"}'
+        values: "0 0 1 1 1"
+      - series: 'corewatch_job_running{job_name="posting", instance="h1"}'
+        values: "0 1 1 0 0"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: JobFailed
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: JobFailed
+        exp_alerts:
+          - exp_labels: { severity: page, layer: jobs, job_name: posting, instance: h1 }
+            exp_annotations:
+              summary: "Job posting on h1 ended with exit code 1"
+              runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#jobfailed"
+
+  - name: one failed AIX disk path pages
+    interval: 1m
+    input_series:
+      - series: 'aix_mpio_paths{status="Enabled", instance="aix1"}'
+        values: "3x10"
+      - series: 'aix_mpio_paths{status="Failed", instance="aix1"}'
+        values: "1x10"
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: AixDiskPathNotEnabled
+        exp_alerts:
+          - exp_labels: { severity: page, layer: aix, status: Failed, instance: aix1 }
+            exp_annotations:
+              summary: "1 disk paths are Failed on aix1"
+              runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#aixpaths"

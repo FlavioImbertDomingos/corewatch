@@ -1,0 +1,162 @@
+groups:
+  - name: db2
+    rules:
+      - alert: Db2Down
+        expr: db2_up == 0
+        for: 1m
+        labels: { severity: page, layer: db2 }
+        annotations:
+          summary: "Db2 database {{ $labels.database }} on {{ $labels.db_host }} is not answering"
+          runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#db2down"
+
+      - alert: Db2ExporterDown
+        expr: up{job="corewatch-db2"} == 0
+        for: 2m
+        labels: { severity: page, layer: monitoring }
+        annotations:
+          summary: "The Db2 exporter is down, so every Db2 alert is blind"
+          runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#db2exporterdown"
+
+      - alert: Db2PortUnreachable
+        expr: probe_success{job="db2-port"} == 0
+        for: 2m
+        labels: { severity: page, layer: db2 }
+        annotations:
+          summary: "Nothing is listening on {{ $labels.instance }}"
+          runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#db2portunreachable"
+
+      - alert: Db2QueryFailing
+        expr: db2_query_success == 0
+        for: 10m
+        labels: { severity: ticket, layer: monitoring }
+        annotations:
+          summary: "Monitoring query {{ $labels.query }} fails on {{ $labels.database }}"
+          runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#db2queryfailing"
+
+      - alert: Db2LogSpaceHigh
+        expr: db2_log_utilization_ratio > 0.70
+        for: 5m
+        labels: { severity: ticket, layer: db2 }
+        annotations:
+          summary: "Transaction log is {{ $value | humanizePercentage }} full on {{ $labels.database }}"
+          runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#db2logspace"
+
+      - alert: Db2LogSpaceCritical
+        expr: db2_log_utilization_ratio > 0.85
+        for: 2m
+        labels: { severity: page, layer: db2 }
+        annotations:
+          summary: "Transaction log is {{ $value | humanizePercentage }} full on {{ $labels.database }}; posting stops at 100%"
+          runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#db2logspace"
+
+      # Auto-resize table spaces grow until the filesystem is full, so the
+      # filesystem alerts cover them. These two cover fixed-size table spaces.
+      - alert: Db2TablespaceNearlyFull
+        expr: db2_tablespace_utilization_ratio > 0.90 and db2_tablespace_auto_resize == 0
+        for: 10m
+        labels: { severity: ticket, layer: db2 }
+        annotations:
+          summary: "Table space {{ $labels.tablespace }} is {{ $value | humanizePercentage }} full on {{ $labels.database }}"
+          runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#db2tablespace"
+
+      - alert: Db2TablespaceFull
+        expr: db2_tablespace_utilization_ratio > 0.97 and db2_tablespace_auto_resize == 0
+        for: 5m
+        labels: { severity: page, layer: db2 }
+        annotations:
+          summary: "Table space {{ $labels.tablespace }} is almost out of room on {{ $labels.database }}"
+          runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#db2tablespace"
+
+      - alert: Db2TablespaceNotNormal
+        expr: db2_tablespace_state_normal == 0
+        for: 5m
+        labels: { severity: page, layer: db2 }
+        annotations:
+          summary: "Table space {{ $labels.tablespace }} is in state {{ $labels.state }} on {{ $labels.database }}"
+          runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#db2tablespacestate"
+
+      - alert: Db2BackupOverdue
+        expr: db2_backup_last_success_age_seconds > 26 * 3600
+        for: 15m
+        labels: { severity: ticket, layer: db2 }
+        annotations:
+          summary: "Last good backup of {{ $labels.database }} was {{ $value | humanizeDuration }} ago"
+          runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#db2backup"
+
+      - alert: Db2BackupMissedTwice
+        expr: db2_backup_last_success_age_seconds > 50 * 3600
+        for: 15m
+        labels: { severity: page, layer: db2 }
+        annotations:
+          summary: "No good backup of {{ $labels.database }} for {{ $value | humanizeDuration }}"
+          runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#db2backup"
+
+      - alert: Db2NoBackupOnRecord
+        expr: db2_backup_found == 0
+        for: 1h
+        labels: { severity: ticket, layer: db2 }
+        annotations:
+          summary: "The history file of {{ $labels.database }} shows no successful backup"
+          runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#db2backup"
+
+      - alert: Db2LockWaits
+        expr: db2_locks_waiting > 5
+        for: 5m
+        labels: { severity: ticket, layer: db2 }
+        annotations:
+          summary: "{{ $value }} agents have been waiting on locks in {{ $labels.database }}"
+          runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#db2locks"
+
+      - alert: Db2Deadlocks
+        expr: increase(db2_deadlocks_total[15m]) > 3
+        labels: { severity: ticket, layer: db2 }
+        annotations:
+          summary: "{{ $value | humanize }} deadlocks in 15 minutes on {{ $labels.database }}"
+          runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#db2locks"
+
+      - alert: Db2LongTransaction
+        expr: db2_oldest_uow_age_seconds > 1800
+        for: 5m
+        labels: { severity: ticket, layer: db2 }
+        annotations:
+          summary: "A transaction has been open for {{ $value | humanizeDuration }} on {{ $labels.database }}"
+          runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#db2longtransaction"
+
+      - alert: Db2HadrNotPeer
+        expr: db2_hadr_peer == 0
+        for: 5m
+        labels: { severity: page, layer: db2 }
+        annotations:
+          summary: "HADR for {{ $labels.database }} ({{ $labels.role }}) has left PEER state"
+          runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#db2hadr"
+
+      - alert: Db2HadrDisconnected
+        expr: db2_hadr_connected == 0
+        for: 2m
+        labels: { severity: page, layer: db2 }
+        annotations:
+          summary: "HADR primary and standby for {{ $labels.database }} are disconnected"
+          runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#db2hadr"
+
+      - alert: Db2HadrLogGapGrowing
+        expr: db2_hadr_log_gap_bytes > 100 * 1024 * 1024 and deriv(db2_hadr_log_gap_bytes[15m]) > 0
+        for: 15m
+        labels: { severity: ticket, layer: db2 }
+        annotations:
+          summary: "The HADR standby for {{ $labels.database }} is {{ $value | humanize1024 }}B behind and falling further"
+          runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#db2hadr"
+
+      - alert: Db2SevereDiagnostics
+        expr: db2_diag_messages{level=~"severe|critical"} > 0 or db2_diag_severe_records > 0
+        for: 1m
+        labels: { severity: ticket, layer: db2 }
+        annotations:
+          summary: "db2diag.log has new severe records"
+          runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#db2diag"
+
+      - alert: Db2RecentlyActivated
+        expr: db2_active_seconds < 600 and db2_active_seconds offset 15m > 600
+        labels: { severity: ticket, layer: db2 }
+        annotations:
+          summary: "{{ $labels.database }} was deactivated or restarted in the last 10 minutes"
+          runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#db2restarted"

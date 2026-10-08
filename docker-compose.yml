@@ -1,0 +1,82 @@
+# One-command demo: Db2 Community Edition plus the full monitoring stack.
+#
+#   cp .env.example .env    # then edit the two passwords
+#   docker compose up -d --build
+#
+# Db2 takes three to five minutes to create its database on first start.
+# Grafana: http://localhost:3000   Prometheus: http://localhost:9090
+# Alertmanager: http://localhost:9093   Exporter: http://localhost:9953/metrics
+
+services:
+  db2:
+    image: icr.io/db2_community/db2:latest
+    privileged: true            # required by the IBM image
+    platform: linux/amd64
+    environment:
+      LICENSE: accept
+      DB2INST1_PASSWORD: ${DB2_PASSWORD:?set DB2_PASSWORD in .env}
+      DBNAME: testdb
+    volumes:
+      - db2data:/database
+    ports:
+      - "127.0.0.1:50000:50000"
+
+  corewatch:
+    build: .
+    platform: linux/amd64
+    environment:
+      DB2_PASSWORD: ${DB2_PASSWORD:?set DB2_PASSWORD in .env}
+    volumes:
+      - ./demo/config.yml:/etc/corewatch/config.yml:ro
+    ports:
+      - "127.0.0.1:9953:9953"
+    restart: unless-stopped
+
+  demo-jobs:
+    image: busybox:1.36
+    command: ["/jobs.sh"]
+    volumes:
+      - ./demo/jobs.sh:/jobs.sh:ro
+      - ./collectors/common/corewatch_job.sh:/corewatch_job.sh:ro
+      - textfiles:/textfiles
+
+  node-exporter:
+    image: quay.io/prometheus/node-exporter:v1.8.2
+    command:
+      - --collector.textfile.directory=/textfiles
+    volumes:
+      - textfiles:/textfiles:ro
+
+  blackbox:
+    image: quay.io/prometheus/blackbox-exporter:v0.25.0
+    volumes:
+      - ./blackbox/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+
+  prometheus:
+    image: quay.io/prometheus/prometheus:v2.54.1
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/rules:/etc/prometheus/rules:ro
+    ports:
+      - "127.0.0.1:9090:9090"
+
+  alertmanager:
+    image: quay.io/prometheus/alertmanager:v0.27.0
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    ports:
+      - "127.0.0.1:9093:9093"
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "127.0.0.1:3000:3000"
+
+volumes:
+  db2data:
+  textfiles:

@@ -1,0 +1,550 @@
+<title>Corewatch Stack Map</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600&display=swap">
+<style>
+/* Layout: a drafting-table sheet. The 3D stack is the drawing; the panel beside it is the legend
+   that changes with what you pick; the tables below are the parts list. */
+:root {
+  --paper: #eef1f4;
+  --sheet: #f8fafb;
+  --ink: #16212c;
+  --ink-soft: #51606e;
+  --rule: #c9d2da;
+  --db2: #1f5fd0;
+  --aix: #0b7f78;
+  --linux: #c2452d;
+  --jobs: #9a6a00;
+  --mon: #3d4a57;
+  --page: #b3261e;
+  --ticket: #6b5a00;
+  --page-bg: #fbe4e1;
+  --ticket-bg: #f6edc4;
+  --code-bg: #e6ebef;
+  --display: "IBM Plex Sans Condensed", "Arial Narrow", Arial, sans-serif;
+  --body: "IBM Plex Sans", "Segoe UI", Helvetica, Arial, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #10161c; --sheet: #161e26; --ink: #e4eaef; --ink-soft: #9aa8b5; --rule: #2e3a46;
+    --db2: #6fa3ff; --aix: #45c4bb; --linux: #ff8a70; --jobs: #e2b23c; --mon: #b8c4cf;
+    --page: #ff9a92; --ticket: #e6d27a; --page-bg: #47201d; --ticket-bg: #3a3413; --code-bg: #1f2a34;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #10161c; --sheet: #161e26; --ink: #e4eaef; --ink-soft: #9aa8b5; --rule: #2e3a46;
+  --db2: #6fa3ff; --aix: #45c4bb; --linux: #ff8a70; --jobs: #e2b23c; --mon: #b8c4cf;
+  --page: #ff9a92; --ticket: #e6d27a; --page-bg: #47201d; --ticket-bg: #3a3413; --code-bg: #1f2a34;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.5; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-inline: 20px; padding-block: 28px 56px; display: flex; flex-direction: column; gap: 28px; }
+h1, h2, h3 { font-family: var(--display); font-weight: 600; line-height: 1.15; margin: 0; text-wrap: balance; }
+h1 { font-size: 34px; letter-spacing: -0.01em; }
+h2 { font-size: 24px; }
+h3 { font-size: 18px; }
+p { margin: 0; max-width: 68ch; }
+a { color: var(--db2); }
+code, .mono { font-family: var(--mono); font-size: 0.9em; }
+code { background: var(--code-bg); padding: 1px 5px; border-radius: 3px; overflow-wrap: anywhere; }
+.head { display: flex; flex-direction: column; gap: 10px; }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); }
+.lede { color: var(--ink-soft); font-size: 16px; }
+
+.filters { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { font: 500 14px var(--body); color: var(--ink); background: var(--sheet); border: 1px solid var(--rule); border-radius: 999px; padding: 6px 14px 6px 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; }
+.chip::before { content: ""; width: 10px; height: 10px; border-radius: 2px; background: var(--c, var(--ink-soft)); }
+.chip[aria-pressed="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.chip:focus-visible, .label:focus-visible, .zoom button:focus-visible { outline: 2px solid var(--db2); outline-offset: 2px; }
+
+.stage { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+.scene { position: relative; height: 540px; background: var(--sheet); border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; touch-action: pan-y; cursor: grab; }
+.scene.dragging { cursor: grabbing; }
+.scene canvas { display: block; width: 100%; height: 100%; }
+.labels { position: absolute; inset: 0; pointer-events: none; }
+.label { position: absolute; transform: translate(-50%, -50%); pointer-events: auto; font: 500 12px var(--mono); color: var(--ink); background: color-mix(in srgb, var(--sheet) 88%, transparent); border: 1px solid var(--rule); border-left: 4px solid var(--c); border-radius: 3px; padding: 3px 7px; white-space: nowrap; cursor: pointer; }
+.label.sel { border-color: var(--ink); border-left-color: var(--c); background: var(--sheet); font-weight: 600; }
+.label.dim { opacity: 0.25; }
+.scene.compact .label:not(.sel) { display: none; }
+.parts { display: none; flex-wrap: wrap; gap: 6px; }
+.parts button { font: 500 12px var(--mono); color: var(--ink); background: var(--sheet); border: 1px solid var(--rule); border-left: 4px solid var(--c); border-radius: 3px; padding: 5px 8px; cursor: pointer; }
+.parts button[aria-pressed="true"] { border-color: var(--ink); border-left-color: var(--c); font-weight: 600; }
+.slab-label { position: absolute; transform: translate(-50%, -50%); font: 600 12px var(--display); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); white-space: nowrap; }
+.hint { position: absolute; left: 12px; bottom: 10px; font: 12px var(--mono); color: var(--ink-soft); }
+.zoom { position: absolute; right: 10px; bottom: 10px; display: flex; gap: 6px; }
+.zoom button { width: 32px; height: 32px; border: 1px solid var(--rule); background: var(--sheet); color: var(--ink); border-radius: 4px; font: 500 18px var(--mono); cursor: pointer; }
+.nogl { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; color: var(--ink-soft); }
+
+  .side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.panel { background: var(--sheet); border: 1px solid var(--rule); border-top: 4px solid var(--c, var(--mon)); border-radius: 6px; padding: 18px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.panel .tag { font: 500 12px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--c, var(--ink-soft)); }
+.panel h4 { font: 600 12px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 6px; }
+.panel ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 5px; }
+.panel li { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; min-width: 0; }
+.sev { font: 500 11px var(--mono); padding: 1px 6px; border-radius: 3px; text-transform: uppercase; letter-spacing: 0.04em; flex: none; }
+.sev.page { color: var(--page); background: var(--page-bg); }
+.sev.ticket { color: var(--ticket); background: var(--ticket-bg); }
+pre { margin: 0; background: var(--code-bg); border-radius: 4px; padding: 10px 12px; font: 13px/1.5 var(--mono); overflow-x: auto; }
+.os-tabs { display: flex; gap: 6px; margin-bottom: 6px; }
+.os-tabs button { font: 500 12px var(--mono); border: 1px solid var(--rule); background: transparent; color: var(--ink); border-radius: 3px; padding: 3px 9px; cursor: pointer; }
+.os-tabs button[aria-pressed="true"] { background: var(--ink); color: var(--sheet); border-color: var(--ink); }
+
+section { display: flex; flex-direction: column; gap: 12px; }
+.section-head { display: flex; align-items: baseline; gap: 10px; border-bottom: 2px solid var(--c, var(--ink)); padding-bottom: 6px; }
+.section-head .swatch { width: 12px; height: 12px; background: var(--c); border-radius: 2px; flex: none; }
+.tablebox { overflow-x: auto; background: var(--sheet); border: 1px solid var(--rule); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; min-width: 760px; font-size: 14px; }
+th { text-align: left; font: 600 12px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); padding: 10px 12px; border-bottom: 1px solid var(--rule); }
+td { padding: 9px 12px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+td code { white-space: nowrap; }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+.card { background: var(--sheet); border: 1px solid var(--rule); border-radius: 6px; padding: 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.note { color: var(--ink-soft); font-size: 14px; }
+@media (max-width: 860px) {
+  .stage { grid-template-columns: minmax(0, 1fr); }
+  .scene { height: 400px; }
+  .parts { display: flex; }
+  h1 { font-size: 28px; }
+}
+</style>
+
+<div class="wrap">
+  <header class="head">
+    <div class="eyebrow">corewatch documentation</div>
+    <h1>How Db2, AIX and Linux are watched</h1>
+    <p class="lede">Drag the drawing to turn it. Pick any part to see what it measures, which alerts it feeds, and the commands to check it by hand. The tables underneath list every signal.</p>
+    <div class="filters" role="group" aria-label="Show one layer">
+      <button class="chip" id="f-all" data-f="all" aria-pressed="true">Everything</button>
+      <button class="chip" id="f-db2" data-f="db2" style="--c: var(--db2)" aria-pressed="false">Db2</button>
+      <button class="chip" id="f-aix" data-f="aix" style="--c: var(--aix)" aria-pressed="false">AIX</button>
+      <button class="chip" id="f-linux" data-f="linux" style="--c: var(--linux)" aria-pressed="false">Linux</button>
+      <button class="chip" id="f-jobs" data-f="jobs" style="--c: var(--jobs)" aria-pressed="false">Batch jobs</button>
+      <button class="chip" id="f-mon" data-f="mon" style="--c: var(--mon)" aria-pressed="false">Monitoring</button>
+    </div>
+  </header>
+
+  <div class="stage">
+    <div class="scene" id="scene">
+      <div class="labels" id="labels"></div>
+      <div class="hint" id="hint">drag to rotate</div>
+      <div class="zoom"><button id="zoom-out" aria-label="Zoom out">&minus;</button><button id="zoom-in" aria-label="Zoom in">+</button></div>
+    </div>
+    <div class="side">
+      <div class="parts" id="parts" role="group" aria-label="Parts of the stack"></div>
+      <aside class="panel" id="panel" aria-live="polite"></aside>
+    </div>
+  </div>
+
+  <section style="--c: var(--db2)" id="db2">
+    <div class="section-head"><span class="swatch"></span><h2>Db2 coverage</h2></div>
+    <p class="note">Collected over SQL by <code>corewatch-db2</code>, which runs off the database server. Queries were run against Db2 12.1 Community Edition on Linux.</p>
+    <div class="tablebox"><table>
+      <thead><tr><th>Signal</th><th>Metric</th><th>Alert</th><th>First check</th></tr></thead>
+      <tbody>
+        <tr><td>Database answers</td><td><code>db2_up</code></td><td><span class="sev page">page</span> Db2Down, 1 min</td><td><code>db2pd -</code></td></tr>
+        <tr><td>Transaction log space</td><td><code>db2_log_utilization_ratio</code></td><td><span class="sev ticket">ticket</span> 70% &nbsp; <span class="sev page">page</span> 85%</td><td><code>db2pd -db NAME -transactions</code></td></tr>
+        <tr><td>Fixed-size table space use</td><td><code>db2_tablespace_utilization_ratio</code></td><td><span class="sev ticket">ticket</span> 90% &nbsp; <span class="sev page">page</span> 97%</td><td><code>db2pd -db NAME -tablespaces</code></td></tr>
+        <tr><td>Table space state</td><td><code>db2_tablespace_state_normal</code></td><td><span class="sev page">page</span> not NORMAL, 5 min</td><td><code>db2 list utilities show detail</code></td></tr>
+        <tr><td>Backup age</td><td><code>db2_backup_last_success_age_seconds</code></td><td><span class="sev ticket">ticket</span> 26 h &nbsp; <span class="sev page">page</span> 50 h</td><td><code>db2 list history backup all for NAME</code></td></tr>
+        <tr><td>Lock waits</td><td><code>db2_locks_waiting</code></td><td><span class="sev ticket">ticket</span> more than 5 for 5 min</td><td><code>db2pd -db NAME -wlocks</code></td></tr>
+        <tr><td>Deadlocks</td><td><code>db2_deadlocks_total</code></td><td><span class="sev ticket">ticket</span> more than 3 in 15 min</td><td><code>db2pd -db NAME -applications</code></td></tr>
+        <tr><td>Oldest open transaction</td><td><code>db2_oldest_uow_age_seconds</code></td><td><span class="sev ticket">ticket</span> 30 min</td><td><code>db2pd -db NAME -transactions</code></td></tr>
+        <tr><td>HADR state</td><td><code>db2_hadr_peer</code>, <code>db2_hadr_connected</code></td><td><span class="sev page">page</span> not PEER or disconnected</td><td><code>db2pd -db NAME -hadr</code></td></tr>
+        <tr><td>HADR log gap</td><td><code>db2_hadr_log_gap_bytes</code></td><td><span class="sev ticket">ticket</span> over 100 MB and growing</td><td><code>db2pd -db NAME -hadr</code></td></tr>
+        <tr><td>Severe diagnostics</td><td><code>db2_diag_messages</code></td><td><span class="sev ticket">ticket</span> any new record</td><td><code>db2diag -H 30m -l Severe,Critical</code></td></tr>
+        <tr><td>Listener reachable</td><td><code>probe_success</code></td><td><span class="sev page">page</span> 2 min</td><td><code>db2 get dbm cfg | grep SVCENAME</code></td></tr>
+        <tr><td>Throughput and cache</td><td><code>db2_commits_total</code>, <code>db2_bufferpool_*_reads_total</code></td><td>dashboard only</td><td></td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section style="--c: var(--aix)" id="aix">
+    <div class="section-head"><span class="swatch"></span><h2>AIX coverage</h2></div>
+    <p class="note">Collected every 5 minutes by <code>corewatch_aix.sh</code> (ksh, run from cron). Tested against recorded command output, not yet on a real AIX partition.</p>
+    <div class="tablebox"><table>
+      <thead><tr><th>Signal</th><th>Metric</th><th>Alert</th><th>First check</th></tr></thead>
+      <tbody>
+        <tr><td>Hardware errors in the error log</td><td><code>aix_errpt_entries{type="P",class="H"}</code></td><td><span class="sev page">page</span> any</td><td><code>errpt -a -j IDENTIFIER</code></td></tr>
+        <tr><td>Software errors in the error log</td><td><code>aix_errpt_entries{type="P",class="S"}</code></td><td><span class="sev ticket">ticket</span> any</td><td><code>errpt | head -20</code></td></tr>
+        <tr><td>Mirror out of sync</td><td><code>aix_vg_stale_pps</code></td><td><span class="sev ticket">ticket</span> 15 min</td><td><code>lsvg -l VG</code>, then <code>syncvg -v VG</code></td></tr>
+        <tr><td>Disk path lost</td><td><code>aix_mpio_paths</code></td><td><span class="sev page">page</span> any path not Enabled, 5 min</td><td><code>lspath</code>, <code>lsmpio -l hdiskN</code></td></tr>
+        <tr><td>Paging space</td><td><code>aix_paging_space_used_ratio</code></td><td><span class="sev ticket">ticket</span> 70%</td><td><code>svmon -G</code>, <code>lsps -a</code></td></tr>
+        <tr><td>Filesystem space</td><td><code>aix_filesystem_used_ratio</code></td><td><span class="sev ticket">ticket</span> 90% &nbsp; <span class="sev page">page</span> 97%</td><td><code>df -g</code>, <code>chfs -a size=+5G /fs</code></td></tr>
+        <tr><td>System image age</td><td><code>aix_mksysb_age_seconds</code></td><td><span class="sev ticket">ticket</span> 8 days</td><td><code>mksysb -i /backup/host.mksysb</code></td></tr>
+        <tr><td>Patch level</td><td><code>aix_oslevel_info</code>, <code>aix_interim_fixes</code></td><td>dashboard only</td><td><code>oslevel -s</code>, <code>emgr -l</code></td></tr>
+        <tr><td>Collector still running</td><td><code>aix_collector_last_run_seconds</code></td><td><span class="sev ticket">ticket</span> 15 min</td><td><code>crontab -l</code></td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section style="--c: var(--linux)" id="linux">
+    <div class="section-head"><span class="swatch"></span><h2>Linux coverage</h2></div>
+    <p class="note">node_exporter supplies CPU, memory, disk and filesystem metrics. <code>corewatch_linux.sh</code> adds the rest through its textfile collector.</p>
+    <div class="tablebox"><table>
+      <thead><tr><th>Signal</th><th>Metric</th><th>Alert</th><th>First check</th></tr></thead>
+      <tbody>
+        <tr><td>Filesystem space</td><td><code>node_filesystem_avail_bytes</code></td><td><span class="sev ticket">ticket</span> 10% free &nbsp; <span class="sev page">page</span> 3% free</td><td><code>df -h</code>, <code>lvextend -r -L +5G</code></td></tr>
+        <tr><td>Filesystem fill rate</td><td><code>predict_linear(...)</code></td><td><span class="sev ticket">ticket</span> full within 4 h</td><td><code>du -xsh /fs/* | sort -h</code></td></tr>
+        <tr><td>Multipath path lost</td><td><code>linux_multipath_paths</code></td><td><span class="sev page">page</span> any failed, 5 min</td><td><code>multipath -ll</code></td></tr>
+        <tr><td>Swap use</td><td><code>node_memory_SwapFree_bytes</code></td><td><span class="sev ticket">ticket</span> 70%</td><td><code>free -h</code></td></tr>
+        <tr><td>Reboot needed after patching</td><td><code>linux_reboot_required</code></td><td><span class="sev ticket">ticket</span> after 7 days</td><td><code>needs-restarting -r</code></td></tr>
+        <tr><td>Security updates waiting</td><td><code>linux_security_updates_pending</code></td><td><span class="sev ticket">ticket</span> after 30 days</td><td><code>dnf updateinfo list --security</code></td></tr>
+        <tr><td>Host answers</td><td><code>up</code></td><td><span class="sev page">page</span> 2 min</td><td><code>systemctl status node_exporter</code></td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section style="--c: var(--jobs)" id="jobs">
+    <div class="section-head"><span class="swatch"></span><h2>Batch jobs, on either platform</h2></div>
+    <div class="two">
+      <div class="card">
+        <h3>Wrap each scheduled command</h3>
+        <pre>corewatch_job.sh nightly_close --max-age 93600 -- /opt/app/close.sh</pre>
+        <p class="note">The wrapper is plain POSIX sh. It records start, end, duration, exit code and last success, and passes the job's exit code through.</p>
+      </div>
+      <div class="card">
+        <h3>Three alerts read it</h3>
+        <ul style="margin:0; padding-left: 18px;">
+          <li><span class="sev page">page</span> JobFailed: the last run ended with a non-zero exit code.</li>
+          <li><span class="sev page">page</span> JobOverdue: no success within <code>--max-age</code>. This catches the job that never started.</li>
+          <li><span class="sev ticket">ticket</span> JobRunningLong: running for more than twice its 7-day average.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  // ---- content ---------------------------------------------------------------
+  var NODES = [
+    { id: "db2-aix", layer: "db2", label: "Db2 on AIX", shape: "cyl", pos: [-5.6, 0.75, 0.9],
+      what: "A Db2 instance on an AIX partition. The exporter connects over TCP as a read-only user and never logs in to the host.",
+      metrics: ["db2_up", "db2_log_utilization_ratio", "db2_tablespace_utilization_ratio", "db2_backup_last_success_age_seconds", "db2_locks_waiting", "db2_oldest_uow_age_seconds", "db2_hadr_peer"],
+      alerts: [["page", "Db2Down"], ["page", "Db2LogSpaceCritical"], ["page", "Db2TablespaceNotNormal"], ["page", "Db2HadrNotPeer"], ["ticket", "Db2BackupOverdue"], ["ticket", "Db2LockWaits"], ["ticket", "Db2LongTransaction"]],
+      cmds: { aix: "su - db2inst1\ndb2pd -\ndb2 list active databases\ndb2diag -H 1h -l Severe,Error\ndf -g; errpt | head", linux: null } },
+    { id: "db2-linux", layer: "db2", label: "Db2 on RHEL", shape: "cyl", pos: [5.6, 0.75, 0.9],
+      what: "The same Db2, on Red Hat Enterprise Linux. The exporter's queries are identical on both platforms, so dashboards and rules do not care which one a database runs on.",
+      metrics: ["db2_up", "db2_log_utilization_ratio", "db2_tablespace_utilization_ratio", "db2_backup_last_success_age_seconds", "db2_locks_waiting", "db2_oldest_uow_age_seconds", "db2_hadr_peer"],
+      alerts: [["page", "Db2Down"], ["page", "Db2LogSpaceCritical"], ["page", "Db2TablespaceNotNormal"], ["page", "Db2HadrNotPeer"], ["ticket", "Db2BackupOverdue"], ["ticket", "Db2LockWaits"], ["ticket", "Db2LongTransaction"]],
+      cmds: { aix: null, linux: "su - db2inst1\ndb2pd -\ndb2 list active databases\ndb2diag -H 1h -l Severe,Error\ndf -h; journalctl -p err -S -1h" } },
+    { id: "aix-collector", layer: "aix", label: "AIX collector", shape: "box", pos: [-2.6, 0.45, 0.6],
+      what: "corewatch_aix.sh, a ksh script run from cron every 5 minutes. It reads the things only AIX has and writes them to a .prom file.",
+      metrics: ["aix_errpt_entries{type,class}", "aix_vg_stale_pps{vg}", "aix_mpio_paths{status}", "aix_paging_space_used_ratio", "aix_filesystem_used_ratio{mountpoint}", "aix_mksysb_age_seconds", "aix_oslevel_info{oslevel}"],
+      alerts: [["page", "AixHardwareError"], ["page", "AixDiskPathNotEnabled"], ["page", "AixFilesystemFull"], ["ticket", "AixStalePartitions"], ["ticket", "AixPagingSpaceHigh"], ["ticket", "AixMksysbTooOld"]],
+      cmds: { aix: "errpt | head -20\nerrpt -a -j IDENTIFIER\nlsvg -o; lsvg rootvg\nlspath\nlsps -s\noslevel -s", linux: null } },
+    { id: "aix-jobs", layer: "jobs", label: "Batch jobs", shape: "box", pos: [-2.6, 0.45, 3.4],
+      what: "Each scheduled command runs through corewatch_job.sh, which records how it went. The same wrapper file runs on AIX and Linux.",
+      metrics: ["corewatch_job_last_exit_code{job_name}", "corewatch_job_last_success_seconds", "corewatch_job_last_duration_seconds", "corewatch_job_running", "corewatch_job_max_age_seconds"],
+      alerts: [["page", "JobFailed"], ["page", "JobOverdue"], ["ticket", "JobRunningLong"]],
+      cmds: { aix: "crontab -l\ncat /var/lib/corewatch/job_NAME.prom\ncorewatch_job.sh NAME --max-age 93600 -- CMD", linux: null } },
+    { id: "aix-textfile", layer: "aix", label: "Textfile server :9954", shape: "box", pos: [-5.6, 0.45, 3.4],
+      what: "A 60-line Python server that hands the .prom files to Prometheus. It needs only the python3 from the AIX Toolbox. Where node_exporter runs on AIX, use its textfile collector and skip this.",
+      metrics: ["corewatch_textfile_age_seconds{file}"],
+      alerts: [["page", "HostDown"], ["ticket", "TextfileStale"], ["ticket", "AixCollectorStale"]],
+      cmds: { aix: "python3 textfile_server.py --dir /var/lib/corewatch --port 9954\nnetstat -Aan | grep 9954", linux: null } },
+    { id: "linux-collector", layer: "linux", label: "Linux collector", shape: "box", pos: [2.6, 0.45, 0.6],
+      what: "corewatch_linux.sh, a bash script run from cron. It adds what node_exporter leaves out: patch status, a pending reboot, and multipath path health.",
+      metrics: ["linux_reboot_required", "linux_security_updates_pending", "linux_multipath_paths{state}", "linux_os_info{id,version,kernel}"],
+      alerts: [["page", "LinuxMultipathFailed"], ["ticket", "LinuxRebootPending"], ["ticket", "LinuxSecurityUpdatesWaiting"], ["ticket", "LinuxCollectorStale"]],
+      cmds: { aix: null, linux: "needs-restarting -r\ndnf updateinfo list --security --updates\nmultipath -ll\ncat /etc/os-release" } },
+    { id: "linux-jobs", layer: "jobs", label: "Batch jobs", shape: "box", pos: [2.6, 0.45, 3.4],
+      what: "Each scheduled command runs through corewatch_job.sh, which records how it went. The same wrapper file runs on AIX and Linux.",
+      metrics: ["corewatch_job_last_exit_code{job_name}", "corewatch_job_last_success_seconds", "corewatch_job_last_duration_seconds", "corewatch_job_running", "corewatch_job_max_age_seconds"],
+      alerts: [["page", "JobFailed"], ["page", "JobOverdue"], ["ticket", "JobRunningLong"]],
+      cmds: { aix: null, linux: "crontab -l\ncat /var/lib/corewatch/job_NAME.prom\ncorewatch_job.sh NAME --max-age 93600 -- CMD" } },
+    { id: "node-exporter", layer: "linux", label: "node_exporter :9100", shape: "box", pos: [5.6, 0.45, 3.4],
+      what: "The standard Prometheus host exporter. It reports CPU, memory, disks and filesystems, and serves the corewatch .prom files through its textfile collector.",
+      metrics: ["node_filesystem_avail_bytes", "node_memory_MemAvailable_bytes", "node_cpu_seconds_total", "node_memory_SwapFree_bytes"],
+      alerts: [["page", "HostDown"], ["page", "LinuxFilesystemFull"], ["ticket", "LinuxFilesystemNearlyFull"], ["ticket", "LinuxFilesystemFillsWithinFourHours"], ["ticket", "LinuxSwapHigh"]],
+      cmds: { aix: null, linux: "systemctl status node_exporter\ncurl -s localhost:9100/metrics | grep corewatch\ndf -h; free -h" } },
+    { id: "exporter", layer: "db2", label: "corewatch-db2 :9953", shape: "box", pos: [0, 3.5, 0.3],
+      what: "The Db2 exporter. One process watches many databases and stamps each metric with the client and environment labels from its config. Every query is independent, so one that fails on an older Db2 level does not stop the rest.",
+      metrics: ["db2_up", "db2_query_success{query}", "db2_scrape_duration_seconds"],
+      alerts: [["page", "Db2ExporterDown"], ["ticket", "Db2QueryFailing"]],
+      cmds: { aix: "corewatch-db2 --config config.yml\ncurl -s localhost:9953/metrics | grep db2_query_success", linux: "corewatch-db2 --config config.yml\ncurl -s localhost:9953/metrics | grep db2_query_success" } },
+    { id: "blackbox", layer: "mon", label: "blackbox probe", shape: "box", pos: [0, 3.5, 3.7],
+      what: "Checks from the outside. It opens a TCP connection to each Db2 port and can read a TLS certificate's expiry date. It catches the case where Db2 is healthy but nothing can reach it.",
+      metrics: ["probe_success", "probe_duration_seconds", "probe_ssl_earliest_cert_expiry"],
+      alerts: [["page", "Db2PortUnreachable"]],
+      cmds: { aix: "db2 get dbm cfg | grep -i SVCENAME\ndb2set DB2COMM\nnetstat -Aan | grep 50000", linux: "db2 get dbm cfg | grep -i SVCENAME\ndb2set DB2COMM\nss -tlnp | grep 50000" } },
+    { id: "prometheus", layer: "mon", label: "Prometheus", shape: "box", pos: [0, 6.4, 2], big: true,
+      what: "Scrapes every exporter each 15 seconds, stores the series, and evaluates 42 alert rules. The rules have unit tests, run with promtool in CI.",
+      metrics: ["up{job}", "ALERTS{alertstate,severity}"],
+      alerts: [],
+      cmds: { aix: "promtool check rules prometheus/rules/*.yml\npromtool test rules tests/rules_test.yml", linux: "promtool check rules prometheus/rules/*.yml\npromtool test rules tests/rules_test.yml" } },
+    { id: "alertmanager", layer: "mon", label: "Alertmanager", shape: "box", pos: [-3.6, 6.4, 2],
+      what: "Groups and routes alerts. Two severities only: a page is a member-facing outage or one that is close, a ticket waits for business hours. When a database is down, its other alerts are held back.",
+      metrics: [],
+      alerts: [],
+      cmds: { aix: "amtool check-config alertmanager/alertmanager.yml", linux: "amtool check-config alertmanager/alertmanager.yml" } },
+    { id: "oncall", layer: "mon", label: "On call", shape: "oct", pos: [-6.6, 6.4, 2],
+      what: "The person who gets the alert. Every alert carries a link to its runbook section, which says what it means, what to check, and the usual fix.",
+      metrics: [], alerts: [],
+      cmds: { aix: "docs/runbooks.md", linux: "docs/runbooks.md" } },
+    { id: "grafana", layer: "mon", label: "Grafana", shape: "box", pos: [3.6, 6.4, 2],
+      what: "One dashboard with a row per layer: Db2, batch jobs, AIX hosts, Linux hosts. A database selector at the top filters the Db2 row.",
+      metrics: [], alerts: [],
+      cmds: { aix: "grafana/dashboards/corewatch.json", linux: "grafana/dashboards/corewatch.json" } }
+  ];
+  var EDGES = [
+    ["db2-aix", "exporter"], ["db2-linux", "exporter"], ["db2-aix", "blackbox"], ["db2-linux", "blackbox"],
+    ["aix-collector", "aix-textfile"], ["aix-jobs", "aix-textfile"],
+    ["linux-collector", "node-exporter"], ["linux-jobs", "node-exporter"],
+    ["exporter", "prometheus"], ["blackbox", "prometheus"], ["aix-textfile", "prometheus"], ["node-exporter", "prometheus"],
+    ["prometheus", "alertmanager"], ["alertmanager", "oncall"], ["prometheus", "grafana"]
+  ];
+  var SLABS = [
+    { label: "AIX on IBM Power", layer: "aix", x: -4.1, z: 2, w: 5.4, d: 4.8 },
+    { label: "RHEL on x86-64 or Power", layer: "linux", x: 4.1, z: 2, w: 5.4, d: 4.8 }
+  ];
+  var LAYER_NAMES = { db2: "Db2", aix: "AIX", linux: "Linux", jobs: "Batch jobs", mon: "Monitoring" };
+  var byId = {};
+  NODES.forEach(function (n) { byId[n.id] = n; });
+
+  // ---- panel -----------------------------------------------------------------
+  var panel = document.getElementById("panel");
+  var selected = "exporter";
+  var filter = "all";
+  var osTab = "aix";
+
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+
+  function renderPanel() {
+    var n = byId[selected];
+    var both = n.cmds.aix && n.cmds.linux && n.cmds.aix !== n.cmds.linux;
+    var os = n.cmds[osTab] ? osTab : (n.cmds.aix ? "aix" : "linux");
+    var html = '<div><div class="tag">' + LAYER_NAMES[n.layer] + '</div><h3>' + esc(n.label) + '</h3></div><p>' + esc(n.what) + '</p>';
+    if (n.metrics.length) {
+      html += '<div><h4>Metrics</h4><ul>' + n.metrics.map(function (m) { return '<li><code>' + esc(m) + '</code></li>'; }).join("") + '</ul></div>';
+    }
+    if (n.alerts.length) {
+      html += '<div><h4>Alerts it feeds</h4><ul>' + n.alerts.map(function (a) { return '<li><span class="sev ' + a[0] + '">' + a[0] + '</span><span>' + esc(a[1]) + '</span></li>'; }).join("") + '</ul></div>';
+    }
+    html += '<div><h4>Check by hand</h4>';
+    if (both) {
+      html += '<div class="os-tabs"><button id="os-aix" data-os="aix" aria-pressed="' + (os === "aix") + '">AIX</button><button id="os-linux" data-os="linux" aria-pressed="' + (os === "linux") + '">Linux</button></div>';
+    }
+    html += '<pre>' + esc(n.cmds[os]) + '</pre></div>';
+    panel.innerHTML = html;
+    panel.style.setProperty("--c", "var(--" + n.layer + ")");
+    Array.prototype.forEach.call(panel.querySelectorAll("[data-os]"), function (b) {
+      b.addEventListener("click", function () { osTab = b.getAttribute("data-os"); renderPanel(); });
+    });
+  }
+
+  function select(id) { selected = id; renderPanel(); syncLabels(); syncMeshes(); }
+
+  function setFilter(f) {
+    filter = f;
+    Array.prototype.forEach.call(document.querySelectorAll(".chip"), function (c) {
+      c.setAttribute("aria-pressed", String(c.getAttribute("data-f") === f));
+    });
+    if (f !== "all" && byId[selected].layer !== f) {
+      var first = NODES.filter(function (n) { return n.layer === f; })[0];
+      if (first) selected = first.id;
+      renderPanel();
+    }
+    syncLabels(); syncMeshes();
+  }
+  Array.prototype.forEach.call(document.querySelectorAll(".chip"), function (c) {
+    c.addEventListener("click", function () { setFilter(c.getAttribute("data-f")); });
+  });
+
+  // ---- labels (HTML over the canvas, so text stays sharp and themed) -----------
+  var labelBox = document.getElementById("labels");
+  var labelEls = {};
+  NODES.forEach(function (n) {
+    var b = document.createElement("button");
+    b.className = "label"; b.id = "label-" + n.id; b.textContent = n.label;
+    b.style.setProperty("--c", "var(--" + n.layer + ")");
+    b.addEventListener("click", function () { select(n.id); });
+    labelBox.appendChild(b); labelEls[n.id] = b;
+  });
+  var partsBox = document.getElementById("parts"), partEls = {};
+  NODES.forEach(function (n) {
+    var b = document.createElement("button");
+    b.id = "part-" + n.id; b.textContent = n.label + (n.layer === "jobs" ? (n.id.indexOf("aix") === 0 ? " (AIX)" : " (Linux)") : "");
+    b.style.setProperty("--c", "var(--" + n.layer + ")");
+    b.addEventListener("click", function () { select(n.id); });
+    partsBox.appendChild(b); partEls[n.id] = b;
+  });
+  var slabEls = SLABS.map(function (s) {
+    var d = document.createElement("div"); d.className = "slab-label"; d.textContent = s.label; labelBox.appendChild(d); return d;
+  });
+  function visible(n) { return filter === "all" || n.layer === filter; }
+  function syncLabels() {
+    NODES.forEach(function (n) {
+      labelEls[n.id].classList.toggle("sel", n.id === selected);
+      labelEls[n.id].classList.toggle("dim", !visible(n));
+      partEls[n.id].setAttribute("aria-pressed", String(n.id === selected));
+      partEls[n.id].hidden = !visible(n);
+    });
+  }
+
+  renderPanel(); syncLabels();
+  var syncMeshes = function () {};
+
+  // ---- 3D scene --------------------------------------------------------------
+  var host = document.getElementById("scene");
+  var gl = null;
+  if (window.THREE) {
+    try { gl = new THREE.WebGLRenderer({ antialias: true, alpha: false }); } catch (e) { gl = null; }
+  }
+  if (!gl) {
+    // Without WebGL the labels become a plain list of buttons.
+    labelBox.style.cssText = "position:static;display:flex;flex-wrap:wrap;gap:8px;padding:16px;pointer-events:auto";
+    Object.keys(labelEls).forEach(function (k) { labelEls[k].style.cssText += ";position:static;transform:none"; });
+    slabEls.forEach(function (e) { e.hidden = true; });
+    document.getElementById("hint").textContent = "3D view unavailable in this browser; pick a part from the list";
+    document.querySelector(".zoom").hidden = true;
+    host.style.height = "auto"; host.style.cursor = "default";
+  } else {
+    var scene = new THREE.Scene();
+    var camera = new THREE.PerspectiveCamera(34, 1, 0.1, 200);
+    gl.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    host.insertBefore(gl.domElement, host.firstChild);
+
+    var amb = new THREE.AmbientLight(0xffffff, 0.78); scene.add(amb);
+    var sun = new THREE.DirectionalLight(0xffffff, 0.55); sun.position.set(6, 12, 8); scene.add(sun);
+
+    var css = function (name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); };
+    var meshes = {}, outlines = {}, slabMeshes = [], edgeLines = [], dots = [];
+
+    NODES.forEach(function (n) {
+      var g;
+      if (n.shape === "cyl") g = new THREE.CylinderGeometry(0.75, 0.75, 1.5, 28);
+      else if (n.shape === "oct") g = new THREE.OctahedronGeometry(0.62);
+      else if (n.big) g = new THREE.BoxGeometry(2.0, 1.1, 1.6);
+      else g = new THREE.BoxGeometry(1.5, 0.9, 1.1);
+      var m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ transparent: true }));
+      m.position.set(n.pos[0], n.pos[1], n.pos[2]); m.userData.id = n.id; scene.add(m); meshes[n.id] = m;
+      var o = new THREE.LineSegments(new THREE.EdgesGeometry(g, 30), new THREE.LineBasicMaterial({ transparent: true }));
+      o.position.copy(m.position); scene.add(o); outlines[n.id] = o;
+    });
+    SLABS.forEach(function (s) {
+      var g = new THREE.BoxGeometry(s.w, 0.12, s.d);
+      var m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ transparent: true, opacity: 0.16 }));
+      m.position.set(s.x, -0.08, s.z); scene.add(m);
+      var o = new THREE.LineSegments(new THREE.EdgesGeometry(g), new THREE.LineBasicMaterial({ transparent: true, opacity: 0.7 }));
+      o.position.copy(m.position); scene.add(o);
+      slabMeshes.push({ s: s, m: m, o: o });
+    });
+    EDGES.forEach(function (e) {
+      var a = new THREE.Vector3().fromArray(byId[e[0]].pos), b = new THREE.Vector3().fromArray(byId[e[1]].pos);
+      var line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([a, b]), new THREE.LineBasicMaterial({ transparent: true, opacity: 0.4 }));
+      scene.add(line); edgeLines.push({ e: e, line: line, a: a, b: b });
+      for (var i = 0; i < 2; i++) {
+        var d = new THREE.Mesh(new THREE.SphereGeometry(0.085, 10, 10), new THREE.MeshBasicMaterial({ transparent: true }));
+        scene.add(d); dots.push({ e: e, mesh: d, a: a, b: b, t: i / 2 });
+      }
+    });
+
+    function applyTheme() {
+      gl.setClearColor(new THREE.Color(css("--sheet")), 1);
+      var ink = new THREE.Color(css("--ink"));
+      NODES.forEach(function (n) {
+        var c = new THREE.Color(css("--" + n.layer));
+        meshes[n.id].material.color.copy(c);
+        outlines[n.id].material.color.copy(ink);
+      });
+      slabMeshes.forEach(function (x) { var c = new THREE.Color(css("--" + x.s.layer)); x.m.material.color.copy(c); x.o.material.color.copy(c); });
+      edgeLines.forEach(function (x) { x.line.material.color.copy(ink); });
+      dots.forEach(function (x) { x.mesh.material.color.copy(new THREE.Color(css("--" + byId[x.e[0]].layer))); });
+      draw();
+    }
+    syncMeshes = function () {
+      NODES.forEach(function (n) {
+        var on = visible(n), sel = n.id === selected;
+        meshes[n.id].material.opacity = on ? (sel ? 1 : 0.82) : 0.1;
+        outlines[n.id].material.opacity = on ? (sel ? 1 : 0.45) : 0.08;
+        var k = sel ? 1.12 : 1; meshes[n.id].scale.set(k, k, k); outlines[n.id].scale.set(k, k, k);
+      });
+      edgeLines.forEach(function (x) { x.line.material.opacity = visible(byId[x.e[0]]) || visible(byId[x.e[1]]) ? 0.4 : 0.06; });
+      dots.forEach(function (x) { x.mesh.visible = visible(byId[x.e[0]]) || visible(byId[x.e[1]]); });
+      draw();
+    };
+
+    // orbit
+    var target = new THREE.Vector3(-0.6, 3.0, 2);
+    var theta0 = 0, theta = 0.2, phi = 1.02, radius = 25, clock = 0;
+    function placeCamera() {
+      camera.position.set(target.x + radius * Math.sin(phi) * Math.sin(theta), target.y + radius * Math.cos(phi), target.z + radius * Math.sin(phi) * Math.cos(theta));
+      camera.lookAt(target);
+    }
+    var v = new THREE.Vector3();
+    function project(p, el) {
+      v.set(p[0], p[1], p[2]).project(camera);
+      el.style.left = ((v.x + 1) / 2 * host.clientWidth) + "px";
+      el.style.top = ((1 - v.y) / 2 * host.clientHeight) + "px";
+    }
+    function draw() {
+      placeCamera();
+      gl.render(scene, camera);
+      NODES.forEach(function (n) { project([n.pos[0], n.pos[1] + (n.shape === "cyl" ? 1.25 : n.big ? 1.05 : 0.95), n.pos[2]], labelEls[n.id]); });
+      SLABS.forEach(function (s, i) { project([s.x, -0.1, s.z + s.d / 2 + 0.55], slabEls[i]); });
+    }
+    function resize() {
+      var w = host.clientWidth, h = host.clientHeight;
+      gl.setSize(w, h, false); camera.aspect = w / h;
+      camera.fov = w < 520 ? 50 : 34; host.classList.toggle('compact', w < 520); camera.updateProjectionMatrix(); draw();
+    }
+    window.addEventListener("resize", resize);
+
+    var still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    var touched = false, dragging = false, moved = 0, lx = 0, ly = 0;
+    // The drawing sways until you reach for it, then holds still so labels are easy to hit.
+    host.addEventListener("pointerenter", function () { touched = true; });
+    host.addEventListener("focusin", function () { touched = true; });
+    host.addEventListener("pointerdown", function (ev) {
+      if (ev.target.closest(".label, .zoom")) return;
+      dragging = true; moved = 0; lx = ev.clientX; ly = ev.clientY; host.classList.add("dragging");
+    });
+    window.addEventListener("pointermove", function (ev) {
+      if (!dragging) return;
+      var dx = ev.clientX - lx, dy = ev.clientY - ly; lx = ev.clientX; ly = ev.clientY; moved += Math.abs(dx) + Math.abs(dy);
+      theta -= dx * 0.008; phi = Math.max(0.35, Math.min(1.45, phi - dy * 0.006)); touched = true;
+      if (still) draw();
+    });
+    window.addEventListener("pointerup", function (ev) {
+      if (!dragging) return; dragging = false; host.classList.remove("dragging");
+      if (moved < 5) pick(ev);
+    });
+    var ray = new THREE.Raycaster(), mouse = new THREE.Vector2();
+    function pick(ev) {
+      var r = host.getBoundingClientRect();
+      mouse.set((ev.clientX - r.left) / r.width * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
+      ray.setFromCamera(mouse, camera);
+      var hit = ray.intersectObjects(NODES.map(function (n) { return meshes[n.id]; }))[0];
+      if (hit) select(hit.object.userData.id);
+    }
+    document.getElementById("zoom-in").addEventListener("click", function () { radius = Math.max(13, radius - 2.5); touched = true; draw(); });
+    document.getElementById("zoom-out").addEventListener("click", function () { radius = Math.min(34, radius + 2.5); touched = true; draw(); });
+
+    new MutationObserver(applyTheme).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTheme);
+
+    var last = performance.now();
+    function frame(now) {
+      var dt = Math.min(0.05, (now - last) / 1000); last = now;
+      if (!touched && !dragging) { clock += dt; theta = theta0 + 0.2 * Math.cos(clock * 0.35); }
+      dots.forEach(function (x) { x.t = (x.t + dt * 0.28) % 1; x.mesh.position.lerpVectors(x.a, x.b, x.t); });
+      draw();
+      requestAnimationFrame(frame);
+    }
+    resize(); applyTheme(); syncMeshes();
+    dots.forEach(function (x) { x.mesh.position.lerpVectors(x.a, x.b, x.t); });
+    draw();
+    if (!still) requestAnimationFrame(frame);
+  }
+
+  // deep links: #db2, #aix, #linux, #jobs
+  var h = (location.hash || "").replace("#", "");
+  if (LAYER_NAMES[h]) setFilter(h);
+})();
+</script>

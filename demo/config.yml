@@ -1,0 +1,11 @@
+cache_seconds: 15
+optional_queries: [diag_history]
+databases:
+  - name: testdb
+    host: db2
+    port: 50000
+    user: db2inst1             # demo only; use a dedicated user in production
+    password_env: DB2_PASSWORD
+    labels:
+      client: demo-cu
+      environment: production
