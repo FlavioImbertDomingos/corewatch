@@ -1,4 +1,9 @@
-"""Run the queries against each database and expose the results to Prometheus."""
+"""Run the queries against each target and expose the results to Prometheus.
+
+A target is a Db2 database or an Informix server. Both go through the same
+steps: connect (or reuse the connection), run the engine's test query, then run
+each monitoring query on its own so one failure cannot hide the others.
+"""
 
 from __future__ import annotations
 
@@ -9,20 +14,28 @@ from typing import Callable, Iterable
 
 from prometheus_client.core import CounterMetricFamily, GaugeMetricFamily
 
+from . import __version__
 from .config import Config, DatabaseConfig
 from .db import Connection, connect
-from .queries import COUNTER, METRICS, QUERIES, Query, Sample
+from .engines import ENGINES, Engine
+from .queries import COUNTER, Query, Sample
 
 log = logging.getLogger("corewatch")
 
+# Metrics every engine reports about the collection itself, by suffix.
 EXPORTER_METRICS = {
-    "db2_up": "1 if the exporter connected and ran a test query.",
-    "db2_scrape_duration_seconds": "Time taken to collect from this database.",
-    "db2_query_success": "1 if the named monitoring query ran, 0 if it failed.",
+    "up": "1 if the exporter connected and ran a test query.",
+    "scrape_duration_seconds": "Time taken to collect from this target.",
+    "query_success": "1 if the named monitoring query ran, 0 if it failed.",
 }
+GLOBAL_METRICS = {
+    "corewatch_engine_enabled": "1 for each engine this exporter is configured to monitor.",
+    "corewatch_build_info": "Exporter version.",
+}
+ALL_METRICS = {name: spec for engine in ENGINES.values() for name, spec in engine.metrics.items()}
 
 
-class Db2Collector:
+class Collector:
     def __init__(
         self,
         config: Config,
@@ -36,19 +49,20 @@ class Db2Collector:
         self._lock = threading.Lock()
         self._cache: list[Sample] | None = None
         self._cache_time = 0.0
-        self.queries: list[Query] = [
-            q for q in QUERIES if not q.optional or q.name in config.optional_queries
-        ]
+        self.queries: dict[str, list[Query]] = {
+            name: [q for q in engine.queries if not q.optional or q.name in config.optional_queries]
+            for name, engine in ENGINES.items()
+        }
 
     # -- collection -------------------------------------------------------
 
-    def _base_labels(self, db: DatabaseConfig) -> tuple[tuple[str, str], ...]:
-        labels = [("database", db.name), ("db_host", db.host)]
+    def _base_labels(self, db: DatabaseConfig, engine: Engine) -> tuple[tuple[str, str], ...]:
+        labels = [(engine.target_label, db.name), ("db_host", db.host)]
         labels += [(name, db.labels.get(name, "")) for name in self.config.label_names]
         return tuple(labels)
 
     def _key(self, db: DatabaseConfig) -> str:
-        return f"{db.host}:{db.port}/{db.name}"
+        return f"{db.engine}://{db.host}:{db.port}/{db.name}"
 
     def _connection(self, db: DatabaseConfig) -> Connection:
         key = self._key(db)
@@ -61,20 +75,22 @@ class Db2Collector:
         if conn is not None:
             conn.close()
 
-    def _collect_database(self, db: DatabaseConfig) -> Iterable[Sample]:
-        base = self._base_labels(db)
+    def _collect_target(self, db: DatabaseConfig) -> Iterable[Sample]:
+        engine = ENGINES[db.engine]
+        p = engine.prefix
+        base = self._base_labels(db, engine)
         started = self._clock()
         try:
             conn = self._connection(db)
-            conn.query("SELECT 1 FROM SYSIBM.SYSDUMMY1")
-        except Exception as exc:  # the database is down or unreachable
+            conn.query(engine.probe_sql)
+        except Exception as exc:  # the target is down or unreachable
             log.warning("cannot reach %s: %s", self._key(db), exc)
             self._drop(db)
-            yield Sample("db2_up", 0.0, base)
-            yield Sample("db2_scrape_duration_seconds", self._clock() - started, base)
+            yield Sample(f"{p}_up", 0.0, base)
+            yield Sample(f"{p}_scrape_duration_seconds", self._clock() - started, base)
             return
-        yield Sample("db2_up", 1.0, base)
-        for query in self.queries:
+        yield Sample(f"{p}_up", 1.0, base)
+        for query in self.queries[db.engine]:
             ok = 1.0
             try:
                 # materialize first so a failing query emits nothing partial
@@ -85,21 +101,33 @@ class Db2Collector:
                 ok = 0.0
             for sample in samples:
                 yield Sample(sample.name, sample.value, base + sample.labels)
-            yield Sample("db2_query_success", ok, base + (("query", query.name),))
-        yield Sample("db2_scrape_duration_seconds", self._clock() - started, base)
+            yield Sample(f"{p}_query_success", ok, base + (("query", query.name),))
+        yield Sample(f"{p}_scrape_duration_seconds", self._clock() - started, base)
 
     def samples(self) -> list[Sample]:
         with self._lock:
             now = self._clock()
             if self._cache is None or now - self._cache_time >= self.config.cache_seconds:
-                fresh: list[Sample] = []
+                fresh: list[Sample] = [Sample("corewatch_build_info", 1.0, (("version", __version__),))]
+                for name in self.config.engines:
+                    fresh.append(Sample("corewatch_engine_enabled", 1.0, (("engine", name),)))
                 for db in self.config.databases:
-                    fresh.extend(self._collect_database(db))
+                    fresh.extend(self._collect_target(db))
                 self._cache = fresh
                 self._cache_time = now
             return list(self._cache)
 
     # -- prometheus_client interface --------------------------------------
+
+    @staticmethod
+    def _describe(name: str) -> tuple[str, str]:
+        if name in ALL_METRICS:
+            kind, doc, _ = ALL_METRICS[name]
+            return kind, doc
+        if name in GLOBAL_METRICS:
+            return "gauge", GLOBAL_METRICS[name]
+        suffix = name.split("_", 1)[1]
+        return "gauge", EXPORTER_METRICS[suffix]
 
     def describe(self):
         return []
@@ -109,10 +137,7 @@ class Db2Collector:
         for sample in self.samples():
             names = [name for name, _ in sample.labels]
             if sample.name not in families:
-                if sample.name in METRICS:
-                    kind, doc, _ = METRICS[sample.name]
-                else:
-                    kind, doc = "gauge", EXPORTER_METRICS[sample.name]
+                kind, doc = self._describe(sample.name)
                 if kind == COUNTER:
                     # prometheus_client adds the _total suffix itself
                     family = CounterMetricFamily(sample.name.removesuffix("_total"), doc, labels=names)
@@ -121,3 +146,7 @@ class Db2Collector:
                 families[sample.name] = family
             families[sample.name].add_metric([value for _, value in sample.labels], sample.value)
         yield from families.values()
+
+
+# The original name, kept so existing imports and deployments keep working.
+Db2Collector = Collector

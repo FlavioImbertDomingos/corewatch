@@ -1,6 +1,8 @@
 # promtool test rules tests/rules_test.yml
 rule_files:
   - ../prometheus/rules/db2.yml
+  - ../prometheus/rules/informix.yml
+  - ../prometheus/rules/exporter.yml
   - ../prometheus/rules/hosts.yml
   - ../prometheus/rules/jobs.yml
 
@@ -121,3 +123,200 @@ tests:
             exp_annotations:
               summary: "1 disk paths are Failed on aix1"
               runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#aixpaths"
+
+  - name: the exporter itself going down pages
+    interval: 1m
+    input_series:
+      - series: 'up{job="corewatch", instance="corewatch:9953"}'
+        values: "1 0 0 0 0"
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: CorewatchExporterDown
+        exp_alerts:
+          - exp_labels: { severity: page, layer: monitoring, job: corewatch, instance: "corewatch:9953" }
+            exp_annotations:
+              summary: "The corewatch exporter is down, so every Db2 and Informix alert is blind"
+              runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#corewatchexporterdown"
+
+  - name: a closed port alerts only for an engine that is being monitored
+    interval: 1m
+    input_series:
+      - series: 'probe_success{job="db-port", engine="db2", instance="db2:50000"}'
+        values: "0x10"
+      - series: 'probe_success{job="db-port", engine="informix", instance="informix:9088"}'
+        values: "0x10"
+      - series: 'corewatch_engine_enabled{engine="informix", job="corewatch", instance="corewatch:9953"}'
+        values: "1x10"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: Db2PortUnreachable
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: InformixPortUnreachable
+        exp_alerts:
+          - exp_labels: { severity: page, layer: informix, job: db-port, engine: informix, instance: "informix:9088" }
+            exp_annotations:
+              summary: "Nothing is listening on the Informix port informix:9088"
+              runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#informixportunreachable"
+
+  - name: informix server down pages after one minute
+    interval: 1m
+    input_series:
+      - series: 'informix_up{server="ifx_prod", db_host="ifx1"}'
+        values: "1 0 0 0"
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: InformixDown
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: InformixDown
+        exp_alerts:
+          - exp_labels: { severity: page, layer: informix, server: ifx_prod, db_host: ifx1 }
+            exp_annotations:
+              summary: "Informix server ifx_prod on ifx1 is not answering"
+              runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#informixdown"
+
+  - name: informix in quiescent mode pages
+    interval: 1m
+    input_series:
+      - series: 'informix_server_mode{server="ifx_prod", db_host="ifx1"}'
+        values: "5 1 1 1 1"
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: InformixNotOnline
+        exp_alerts:
+          - exp_labels: { severity: page, layer: informix, server: ifx_prod, db_host: ifx1 }
+            exp_annotations:
+              summary: "Informix server ifx_prod is not On-Line (sh_mode 1); applications cannot work normally"
+              runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#informixnotonline"
+
+  - name: logical logs warn at 70 percent and page at 85
+    interval: 1m
+    input_series:
+      - series: 'informix_logical_log_utilization_ratio{server="ifx_prod", db_host="ifx1"}'
+        values: "0.5x5 0.8x10 0.9x10"
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: InformixLogicalLogsHigh
+        exp_alerts:
+          - exp_labels: { severity: ticket, layer: informix, server: ifx_prod, db_host: ifx1 }
+            exp_annotations:
+              summary: "80% of logical logs on ifx_prod cannot be reused yet"
+              runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#informixlogs"
+      - eval_time: 12m
+        alertname: InformixLogicalLogsCritical
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: InformixLogicalLogsCritical
+        exp_alerts:
+          - exp_labels: { severity: page, layer: informix, server: ifx_prod, db_host: ifx1 }
+            exp_annotations:
+              summary: "90% of logical logs on ifx_prod are in use; the server blocks all updates when none is free"
+              runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#informixlogs"
+
+  - name: a transaction spanning half the logs pages before LTXHWM
+    interval: 1m
+    input_series:
+      - series: 'informix_oldest_transaction_log_span{server="ifx_prod", db_host="ifx1"}'
+        values: "1 2 5 5 5 5"
+      - series: 'informix_logical_logs{server="ifx_prod", db_host="ifx1"}'
+        values: "10x6"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: InformixLongTransaction
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: InformixLongTransaction
+        exp_alerts:
+          - exp_labels: { severity: page, layer: informix, server: ifx_prod, db_host: ifx1 }
+            exp_annotations:
+              summary: "The oldest open transaction on ifx_prod spans 50% of the logical logs; long-transaction rollback starts at LTXHWM"
+              runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#informixlongtransaction"
+
+  - name: a full data dbspace alerts, a full temp dbspace does not
+    interval: 1m
+    input_series:
+      - series: 'informix_dbspace_utilization_ratio{server="ifx_prod", db_host="ifx1", dbspace="datadbs"}'
+        values: "0.95x20"
+      - series: 'informix_dbspace_info{server="ifx_prod", db_host="ifx1", dbspace="datadbs", type="data"}'
+        values: "1x20"
+      - series: 'informix_dbspace_utilization_ratio{server="ifx_prod", db_host="ifx1", dbspace="tempdbs"}'
+        values: "0.99x20"
+      - series: 'informix_dbspace_info{server="ifx_prod", db_host="ifx1", dbspace="tempdbs", type="temp"}'
+        values: "1x20"
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: InformixDbspaceNearlyFull
+        exp_alerts:
+          - exp_labels: { severity: ticket, layer: informix, server: ifx_prod, db_host: ifx1, dbspace: datadbs }
+            exp_annotations:
+              summary: "Dbspace datadbs is 95% full on ifx_prod"
+              runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#informixdbspace"
+      - eval_time: 15m
+        alertname: InformixDbspaceFull
+        exp_alerts: []
+
+  - name: an offline chunk pages
+    interval: 1m
+    input_series:
+      - series: 'informix_chunks_offline{server="ifx_prod", db_host="ifx1", dbspace="datadbs"}'
+        values: "0 1 1 1"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: InformixChunkOffline
+        exp_alerts:
+          - exp_labels: { severity: page, layer: informix, server: ifx_prod, db_host: ifx1, dbspace: datadbs }
+            exp_annotations:
+              summary: "1 chunk(s) of dbspace datadbs are down on ifx_prod"
+              runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#informixchunkoffline"
+
+  - name: a level-0 archive older than 26 hours opens a ticket
+    interval: 1m
+    input_series:
+      - series: 'informix_backup_level0_age_seconds{server="ifx_prod", db_host="ifx1", dbspace="rootdbs"}'
+        values: "93600+60x30"
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: InformixBackupOverdue
+        exp_alerts:
+          - exp_labels: { severity: ticket, layer: informix, server: ifx_prod, db_host: ifx1, dbspace: rootdbs }
+            exp_annotations:
+              summary: "Last level-0 archive of dbspace rootdbs on ifx_prod was 1d 2h 20m 0s ago"
+              runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#informixbackup"
+      - eval_time: 20m
+        alertname: InformixBackupMissedTwice
+        exp_alerts: []
+
+  - name: a lock table overflow pages and names the table
+    interval: 1m
+    input_series:
+      - series: 'informix_lock_table_overflows_total{server="ifx_prod", db_host="ifx1"}'
+        values: "0 0 3 3"
+      - series: 'informix_user_table_overflows_total{server="ifx_prod", db_host="ifx1"}'
+        values: "0 0 0 0"
+      - series: 'informix_transaction_table_overflows_total{server="ifx_prod", db_host="ifx1"}'
+        values: "0 0 0 0"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: InformixTableOverflow
+        exp_alerts:
+          - exp_labels: { severity: page, layer: informix, server: ifx_prod, db_host: ifx1, table: lock }
+            exp_annotations:
+              summary: "The Informix lock table on ifx_prod overflowed 3 times in 15 minutes"
+              runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#informixoverflow"
+
+  - name: a database without logging opens a ticket after an hour
+    interval: 1m
+    input_series:
+      - series: 'informix_database_info{server="ifx_prod", db_host="ifx1", dbname="scratch", logging="none"}'
+        values: "1x70"
+      - series: 'informix_database_info{server="ifx_prod", db_host="ifx1", dbname="corebank", logging="unbuffered"}'
+        values: "1x70"
+    alert_rule_test:
+      - eval_time: 65m
+        alertname: InformixDatabaseNotLogged
+        exp_alerts:
+          - exp_labels: { severity: ticket, layer: informix, server: ifx_prod, db_host: ifx1, dbname: scratch, logging: none }
+            exp_annotations:
+              summary: "Database scratch on ifx_prod has no transaction logging: no rollback, no point-in-time restore, no HDR"
+              runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#informixnotlogged"

@@ -3,7 +3,7 @@
 #   ticket: fix during business hours.
 route:
   receiver: tickets
-  group_by: [alertname, database, instance]
+  group_by: [alertname, database, server, instance]
   group_wait: 30s
   group_interval: 5m
   repeat_interval: 4h
@@ -25,6 +25,13 @@ inhibit_rules:
   - source_matchers: [alertname="Db2Down"]
     target_matchers: [layer="db2"]
     equal: [database, db_host]
+  # The same for an Informix server and its alerts.
+  - source_matchers: [alertname=~"InformixDown|InformixNotOnline"]
+    target_matchers: [layer="informix", alertname!~"InformixDown|InformixNotOnline"]
+    equal: [server, db_host]
+  # When the exporter is down, its query failures are a symptom, not a cause.
+  - source_matchers: [alertname="CorewatchExporterDown"]
+    target_matchers: [alertname=~"Db2QueryFailing|InformixQueryFailing"]
   # When a host is down, do not also report its collectors as stale.
   - source_matchers: [alertname="HostDown"]
     target_matchers: [layer=~"aix|linux|jobs"]

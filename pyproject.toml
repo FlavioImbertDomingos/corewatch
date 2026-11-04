@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "corewatch"
-version = "0.1.0"
-description = "Prometheus monitoring for Db2 on AIX and Linux: a Db2 exporter, host collectors and alert rules"
+version = "0.2.0"
+description = "Prometheus monitoring for Db2 and Informix on AIX and Linux: a database exporter, host collectors and alert rules"
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
@@ -16,6 +16,7 @@ dependencies = ["ibm_db>=3.2", "prometheus-client>=0.19", "PyYAML>=6"]
 dev = ["pytest>=8"]
 
 [project.scripts]
+corewatch-exporter = "corewatch.exporter:main"
 corewatch-db2 = "corewatch.exporter:main"
 corewatch-textfiles = "corewatch.textfile_server:main"
 

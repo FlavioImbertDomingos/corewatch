@@ -1,8 +1,10 @@
 # Runbooks
 
-Every alert links to a section here. Each one says what the alert means, what to check, and the usual fix. Commands are given for AIX and Linux where they differ. Run Db2 commands as the instance owner.
+Every alert links to a section here. Each one says what the alert means, what to check, and the usual fix. Commands are given for AIX and Linux where they differ. Run Db2 commands as the instance owner and Informix commands as user `informix`, with `INFORMIXDIR`, `INFORMIXSERVER` and `ONCONFIG` set.
 
-Check a command against the man page or `db2 ? <command>` before using it on a production system. Follow your change process for anything that alters state.
+Check a command against the man page, `db2 ? <command>` or the Informix documentation before using it on a production system. Follow your change process for anything that alters state.
+
+Sections: [exporter](#corewatchexporterdown), [Db2](#db2down), [Informix](#informixdown), [AIX](#hostdown), [Linux](#linuxmultipath), [batch jobs](#jobfailed).
 
 ## Db2Down
 
@@ -14,17 +16,17 @@ The exporter could not connect to the database or run `SELECT 1`.
 4. If both are up, the problem is between the exporter and Db2. See Db2PortUnreachable.
 5. Check the host: `errpt | head` on AIX, `journalctl -p err -S -1h` on Linux, and filesystem space with `df`.
 
-## Db2ExporterDown
+## CorewatchExporterDown
 
-Prometheus cannot scrape the exporter, so no Db2 alert can fire.
+Prometheus cannot scrape the exporter, so no Db2 or Informix alert can fire.
 
-1. Check the process or container: `systemctl status corewatch-db2` or `docker compose ps corewatch`.
-2. Read its log. A config error or a missing password variable stops it at startup.
+1. Check the process or container: `systemctl status corewatch-exporter` or `docker compose ps corewatch`.
+2. Read its log. A config error, an unknown engine or a missing password variable stops it at startup with `configuration error: ...`.
 3. Confirm the port (9953 by default) is reachable from Prometheus.
 
 ## Db2PortUnreachable
 
-The TCP probe to the Db2 listener failed.
+The TCP probe to the Db2 listener failed. It only fires while the exporter is configured to monitor Db2 (`corewatch_engine_enabled{engine="db2"}`), so a Db2 that is deliberately not running does not page.
 
 1. On the server: `db2 get dbm cfg | grep -i SVCENAME` and `db2set DB2COMM` (should show `TCPIP`).
 2. Confirm the listener: `netstat -Aan | grep <port>` on AIX, `ss -tlnp | grep <port>` on Linux.
@@ -117,6 +119,138 @@ The database was activated in the last 10 minutes after having been up. It was e
 
 1. Check for a change ticket.
 2. If there is none, read `db2diag -H 1h` for the reason, and `errpt` or `journalctl` for a host event at the same time.
+
+## InformixDown
+
+The exporter could not log in to the `sysmaster` database over DRDA or run its test query.
+
+1. On the server: `onstat -`. "Shared memory not initialized" means the server is off-line; any other line shows the mode and uptime.
+2. If it is off-line: read the end of the message log with `tail -100 $(onstat -c | awk '$1 == "MSGPATH" {print $2}')`, fix the cause, then start it with `oninit -vy`.
+3. If it is On-Line, check the DRDA listener the exporter uses. `grep drsoctcp $INFORMIXSQLHOSTS` (default `$INFORMIXDIR/etc/sqlhosts`) shows its name and port, and that name must be in `DBSERVERNAME` or `DBSERVERALIASES` in the onconfig file. `onstat -g ntt` lists the listener threads.
+4. If the listener is up, test the login from the exporter host. A refused password or a missing `CONNECT` on sysmaster shows as `SQL30060N` or `SQL30082N` in the exporter log. See [docs/privileges-informix.sql](privileges-informix.sql).
+5. Check the host: `errpt | head` on AIX, `journalctl -p err -S -1h` on Linux, and filesystem space with `df`.
+
+## InformixNotOnline
+
+The server answers, but is not On-Line (`sh_mode` is not 5). The value in the alert is the raw mode.
+
+1. `onstat -` names the mode: Quiescent, Single-User, Fast Recovery, Archive Backup, Shutdown.
+2. Quiescent or Single-User usually means someone ran `onmode -s` or `onmode -j` for maintenance. Confirm with the change calendar, then return to On-Line with `onmode -m`.
+3. Fast Recovery after a crash finishes on its own; watch `onstat -m`. If it does not progress, read the message log for the reason.
+4. A secondary server (HDR, RSS, SDS) runs read-only by design. If this alert fires there, add a `role` exception to the rule.
+
+## InformixPortUnreachable
+
+The TCP probe to the Informix SQLI listener (9088 in the demo) failed. Applications use this port. It only fires while the exporter is configured to monitor Informix.
+
+1. `onstat -g ntt` and `ss -tlnp | grep <port>` on Linux, `netstat -Aan | grep <port>` on AIX, show whether the listener is up.
+2. `grep onsoctcp $INFORMIXSQLHOSTS` shows the port. The service name or port must match what clients use.
+3. Restart one listener without restarting the server: `onmode -P restart <servername>` (12.10 and later).
+4. If the server listens locally, check firewalls and routing between the prober and the server.
+
+## InformixQueryFailing
+
+One monitoring query fails while the server is up. The `query` label names it.
+
+1. Read the exporter log for the error number.
+2. `-387` (no connect permission) or `-272` (no select permission) means a missing grant. Compare with [docs/privileges-informix.sql](privileges-informix.sql).
+3. `-206` (table not in the database) or `-217` (column not found) means the sysmaster table or column does not exist on this release. The queries were run against Informix 15.0.1; open an issue with the output of `onstat -`.
+
+## InformixLogs
+
+Logical logs are running out. A log is reusable only when it is backed up, is not the current log and holds no part of an open transaction. When none is free the server blocks every update.
+
+1. `onstat -l` lists the logs with their flags: `U` used, `B` backed up, `C` current, `L` holds the last checkpoint. Logs flagged `U` without `B` wait for backup; see InformixLogBackup.
+2. If the logs are backed up but still not free, an open transaction pins them. See InformixLongTransaction: `onstat -x` shows where each transaction began (`begin_logpos`).
+3. Back up full logs now: `ontape -a`, or `onbar -b -l` with a storage manager.
+4. For room right now, add a log after the current one: `onparams -a -d <dbspace> -s <size KB> -i`. With `DYNAMIC_LOGS 2` the server adds logs itself during a long-transaction rollback.
+
+## InformixLogBackup
+
+Full logical logs are waiting to be backed up. Continuous log backup has stopped or cannot keep up, and when the last free log fills the server blocks.
+
+1. `onstat -l`: logs flagged `U` but not `B` are the backlog.
+2. Find out how logs are normally backed up: an `ontape -c` session, `onbar -b -l -C`, or the `ALARMPROGRAM` script with `BACKUPLOGS=Y`. Check that process is running and read its log (`BAR_ACT_LOG` for onbar).
+3. Check the backup target (tape, directory or storage manager) has space and is reachable.
+4. Back up the waiting logs by hand: `ontape -a` or `onbar -b -l`.
+
+## InformixLongTransaction
+
+The oldest open transaction covers a large share of the logical logs. At `LTXHWM` (70% by default) the server starts rolling it back on its own, and the rollback needs log space too; at `LTXEHWM` it gives the rollback exclusive use of the logs, which stops other work.
+
+1. `onstat -x` lists open transactions. `begin_logpos` is `<log unique ID>:<position>`; the lowest unique ID is the oldest transaction. Compare it with the current log (flag `C`) in `onstat -l`.
+2. The transaction's `userthread` value appears in the `address` column of `onstat -u`, which gives its session ID (`sessid`).
+3. See what the session is doing: `onstat -g ses <sid>` and `onstat -g sql <sid>`.
+4. With the application owner's agreement, have it commit, or end the session with `onmode -z <sid>`. Ending it rolls the transaction back, which takes time and log space.
+5. Afterwards, ask whether the batch job should commit in smaller units.
+
+## InformixDbspace
+
+A data dbspace is nearly full. Inserts into tables in it fail when it fills.
+
+1. `onstat -d` shows every chunk with its size and free pages.
+2. Add a chunk: `onspaces -a <dbspace> -p <path> -o <offset KB> -s <size KB>`. The path must exist, belong to informix:informix and be mode 660.
+3. Better long-term: let the space grow by itself. Add a storage pool entry (`EXECUTE FUNCTION task("storagepool add", ...)`) and mark chunks extendable (`EXECUTE FUNCTION task("modify chunk extendable", ...)`) in the `sysadmin` database.
+4. Check the filesystem or volume underneath has room: `df -g` on AIX, `df -h` on Linux.
+
+## InformixChunkOffline
+
+A chunk is marked down. Data in it cannot be read and tables in that dbspace return errors.
+
+1. `onstat -d` shows the chunk's flags; `D` means down. The message log says when and why it went down.
+2. Check the device: does the path exist, is it owned by informix:informix with mode 660, is the disk healthy? On AIX: `errpt -a | more` and `lspath -l <hdisk>`. On Linux: `dmesg | tail` and `multipath -ll`.
+3. If the dbspace is mirrored, the mirror keeps serving. After fixing the device, recover the chunk: `onspaces -s <dbspace> -p <path> -o <offset> -O`.
+4. If it is not mirrored, the data needs a warm restore of that dbspace: `onbar -r <dbspace>` or `ontape -r -D <dbspace>`, followed by log restore.
+
+## InformixBackup
+
+A dbspace has no level-0 archive within the expected window, or none at all. A restore always starts from a level-0.
+
+1. See what the scheduler did: `onstat -g arc` (last archive per dbspace), the onbar activity log (`BAR_ACT_LOG`), and JobFailed or JobOverdue if the archive job runs under `corewatch_job.sh`.
+2. Check the backup target has space and is reachable.
+3. Run one by hand if policy allows: `ontape -s -L 0` or `onbar -b -L 0`.
+4. A newly added dbspace has no archive until the next level-0 runs. That is expected after `onspaces -c`.
+
+## InformixLocks
+
+Sessions are queuing on locks, or deadlocks are occurring.
+
+1. `onstat -u` shows sessions; a waiting session has a lock address in the `wait` column. `onstat -k` lists the locks with their `owner` and `waiter`.
+2. Find the holder's session and what it runs: `onstat -g ses <sid>`, `onstat -g sql <sid>`.
+3. With the owner's agreement, have it commit, or end it with `onmode -z <sid>`.
+4. For recurring contention: tables created with page-level locking lock many rows at once (`ALTER TABLE <t> LOCK MODE (ROW)`), and applications should use `SET LOCK MODE TO WAIT <seconds>` instead of failing at once or waiting forever.
+5. Deadlocks return error `-143` to one of the sessions. Repeated deadlocks between the same programs mean they update rows in a different order.
+
+## InformixOverflow
+
+The lock, user or transaction table hit its limit (`onstat -p`: `ovlock`, `ovuser`, `ovtrans`). The session that hit it got an error.
+
+1. `onstat -p` shows the overflow counters; `onstat -z` resets them after the fix.
+2. Lock table: find sessions holding many locks with `onstat -u` (`locks` column). A program that locks a whole table row by row needs `LOCK TABLE` or smaller transactions. Raise `LOCKS` in the onconfig file if the load is legitimate.
+3. User or transaction table: check `onstat -g ses` for a connection leak before raising limits.
+
+## InformixCheckpoint
+
+The last checkpoint blocked transactions for more than two seconds. Non-blocking checkpoints should block for close to zero.
+
+1. `onstat -g ckp` shows recent checkpoints with duration, block time, dirty buffers and the trigger.
+2. Long flushes point at slow disks (`iostat` on the chunk devices) or too many dirty buffers.
+3. Review `AUTO_CKPTS`, `RTO_SERVER_RESTART`, the physical log size and the LRU settings. Blocking checkpoints triggered by a full physical log mean it is too small.
+
+## InformixRestarted
+
+The server's uptime reset in the last 10 minutes.
+
+1. Was it planned? Check the change calendar.
+2. If not: `onstat -m` and the message log around the restart. An assertion failure leaves `af.*` files in `DUMPDIR`.
+3. Check the host: `errpt` on AIX, `journalctl -b -1` on Linux.
+
+## InformixNotLogged
+
+A database has no transaction logging. It cannot roll back, cannot be restored to a point in time, and cannot be replicated with HDR or RSS.
+
+1. Confirm whether that is deliberate (scratch or staging data sometimes is).
+2. To turn logging on: `ondblog unbuf <db>` (or `buf`), then take a level-0 archive (`ontape -s -L 0`), which completes the change. With ontape alone: `ontape -s -L 0 -U <db>`.
 
 ## HostDown
 

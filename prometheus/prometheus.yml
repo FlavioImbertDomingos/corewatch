@@ -11,8 +11,9 @@ alerting:
         - targets: ["alertmanager:9093"]
 
 scrape_configs:
-  # The Db2 exporter. One exporter can watch many databases.
-  - job_name: corewatch-db2
+  # The database exporter: Db2 databases and Informix servers. One exporter
+  # can watch many targets of both engines.
+  - job_name: corewatch
     static_configs:
       - targets: ["corewatch:9953"]
 
@@ -29,12 +30,17 @@ scrape_configs:
   #     - targets: ["aix-prod-01:9954"]
   #       labels: { os: aix }
 
-  # Is the Db2 port reachable from outside the database server?
-  - job_name: db2-port
+  # Are the database listener ports reachable from outside the server? The
+  # engine label lets the port alerts check corewatch_engine_enabled, so a
+  # database that is deliberately not running is not reported as unreachable.
+  - job_name: db-port
     metrics_path: /probe
     params: { module: [tcp_connect] }
     static_configs:
       - targets: ["db2:50000"]
+        labels: { engine: db2 }
+      - targets: ["informix:9088"]       # SQLI listener used by applications
+        labels: { engine: informix }
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target

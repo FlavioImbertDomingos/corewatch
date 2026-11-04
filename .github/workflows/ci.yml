@@ -15,16 +15,25 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y ksh shellcheck
           pip install -e ".[dev]"
-      - name: Unit tests (Python, job wrapper, AIX collector against recorded output)
+      - name: Unit tests (Db2 and Informix collection, job wrapper, AIX collector against recorded output)
         run: pytest -q
+      - name: Demo workload compiles
+        run: python -m py_compile demo/workload.py grafana/build_dashboard_informix.py
       - name: Shell checks
         run: |
-          shellcheck -S warning collectors/linux/corewatch_linux.sh collectors/common/corewatch_job.sh
+          shellcheck -S warning collectors/linux/corewatch_linux.sh collectors/common/corewatch_job.sh demo/informix/post_init.sh
+          shellcheck -s sh -S warning bin/corewatch-demo
           ksh -n collectors/aix/corewatch_aix.sh
+      - name: Compose file
+        run: |
+          cp .env.example .env
+          docker compose config --quiet
+          docker compose --profile db2 --profile informix config --services
       - name: Alert rules
         run: |
           docker run --rm -v "$PWD:/w" -w /w --entrypoint promtool quay.io/prometheus/prometheus:v2.54.1 \
-            check rules prometheus/rules/db2.yml prometheus/rules/hosts.yml prometheus/rules/jobs.yml
+            check rules prometheus/rules/db2.yml prometheus/rules/informix.yml prometheus/rules/exporter.yml \
+            prometheus/rules/hosts.yml prometheus/rules/jobs.yml
           docker run --rm -v "$PWD:/w" -w /w/tests --entrypoint promtool quay.io/prometheus/prometheus:v2.54.1 \
             test rules rules_test.yml
           docker run --rm -v "$PWD:/w" -w /w --entrypoint amtool quay.io/prometheus/alertmanager:v0.27.0 \

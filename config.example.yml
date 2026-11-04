@@ -1,4 +1,4 @@
-# corewatch-db2 configuration
+# corewatch-exporter configuration (Db2 and Informix)
 listen:
   address: 0.0.0.0
   port: 9953
@@ -19,5 +19,18 @@ databases:
     password_env: COREWATCH_DB2_PASSWORD   # or password_file: /run/secrets/db2
     ssl: false
     labels:                    # copied onto every metric from this database
+      client: example-cu
+      environment: production
+
+  # An Informix server. Monitoring is per server, through sysmaster, over the
+  # server's DRDA listener (an sqlhosts entry with protocol drsoctcp). name is
+  # the DBSERVERNAME and becomes the server="..." label.
+  - name: ifx_core
+    engine: informix           # db2 is the default
+    host: ifx-prod-01.example.internal
+    port: 9089                 # the drsoctcp port, not the onsoctcp one
+    user: corewatch            # CONNECT on sysmaster only; see docs/privileges-informix.sql
+    password_env: COREWATCH_INFORMIX_PASSWORD
+    labels:
       client: example-cu
       environment: production

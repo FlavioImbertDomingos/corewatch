@@ -1,35 +1,89 @@
-# One-command demo: Db2 Community Edition plus the full monitoring stack.
+# One-command demo: Db2 Community Edition and/or Informix Developer Edition,
+# plus the full monitoring stack.
 #
-#   cp .env.example .env    # then edit the two passwords
-#   docker compose up -d --build
+#   bin/corewatch-demo up            # asks which database to start
+#   bin/corewatch-demo up both       # or name it: db2, informix, both
 #
-# Db2 takes three to five minutes to create its database on first start.
+# The script writes COMPOSE_PROFILES and COREWATCH_ENGINES to .env, so plain
+# "docker compose up -d" afterwards starts the same selection.
+#
+# First start: Db2 takes three to five minutes to create its database,
+# Informix about one minute.
 # Grafana: http://localhost:3000   Prometheus: http://localhost:9090
 # Alertmanager: http://localhost:9093   Exporter: http://localhost:9953/metrics
+
+x-corewatch-image: &corewatch-image
+  build: .
+  image: corewatch-local:latest
+  platform: linux/amd64
 
 services:
   db2:
     image: icr.io/db2_community/db2:latest
+    profiles: [db2]
     privileged: true            # required by the IBM image
     platform: linux/amd64
     environment:
       LICENSE: accept
-      DB2INST1_PASSWORD: ${DB2_PASSWORD:?set DB2_PASSWORD in .env}
+      DB2INST1_PASSWORD: ${DB2_PASSWORD:?set DB2_PASSWORD in .env (bin/corewatch-demo does this)}
       DBNAME: testdb
     volumes:
       - db2data:/database
     ports:
       - "127.0.0.1:50000:50000"
 
-  corewatch:
-    build: .
+  informix:
+    image: icr.io/informix/informix-developer-database:15.0.1.0.3
+    profiles: [informix]
+    hostname: ifx               # the image's sqlhosts listens on this host name
+    privileged: true            # required by the IBM image
     platform: linux/amd64
     environment:
+      LICENSE: accept
+      SIZE: small
+      # One-time setup on first start: passwords, the corewatch monitoring
+      # user, a data dbspace, the corebank demo database and a level-0 archive.
+      RUN_FILE_POST_INIT: post_init.sh
+      INFORMIX_PASSWORD: ${INFORMIX_PASSWORD:-}
+      COREWATCH_INFORMIX_PASSWORD: ${COREWATCH_INFORMIX_PASSWORD:-}
+    volumes:
+      - ifxdata:/opt/ibm/data
+      - ./demo/informix/post_init.sh:/opt/ibm/files/post_init.sh:ro
+    ports:
+      - "127.0.0.1:9088:9088"   # SQLI: dbaccess, JDBC, ESQL/C applications
+      - "127.0.0.1:9089:9089"   # DRDA: the corewatch exporter
+    healthcheck:
+      test: ["CMD", "/opt/ibm/scripts/informix_alive.sh"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 180s
+
+  corewatch:
+    <<: *corewatch-image
+    environment:
       DB2_PASSWORD: ${DB2_PASSWORD:?set DB2_PASSWORD in .env}
+      COREWATCH_INFORMIX_PASSWORD: ${COREWATCH_INFORMIX_PASSWORD:-}
+      # Only the targets of these engines are monitored, so a stopped database
+      # is not reported as down. Set by bin/corewatch-demo.
+      COREWATCH_ENGINES: ${COREWATCH_ENGINES:-db2}
     volumes:
       - ./demo/config.yml:/etc/corewatch/config.yml:ro
     ports:
       - "127.0.0.1:9953:9953"
+    restart: unless-stopped
+
+  demo-workload:
+    <<: *corewatch-image
+    entrypoint: ["python", "/demo/workload.py"]
+    command: ["traffic"]
+    environment:
+      DB2_PASSWORD: ${DB2_PASSWORD:?set DB2_PASSWORD in .env}
+      INFORMIX_PASSWORD: ${INFORMIX_PASSWORD:-}
+      COREWATCH_ENGINES: ${COREWATCH_ENGINES:-db2}
+      DEMO_TRAFFIC: ${DEMO_TRAFFIC:-on}
+    volumes:
+      - ./demo/workload.py:/demo/workload.py:ro
     restart: unless-stopped
 
   demo-jobs:
@@ -79,4 +133,5 @@ services:
 
 volumes:
   db2data:
+  ifxdata:
   textfiles:

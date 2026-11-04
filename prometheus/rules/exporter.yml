@@ -1,0 +1,11 @@
+# Alerts about the monitoring itself.
+groups:
+  - name: exporter
+    rules:
+      - alert: CorewatchExporterDown
+        expr: up{job="corewatch"} == 0
+        for: 2m
+        labels: { severity: page, layer: monitoring }
+        annotations:
+          summary: "The corewatch exporter is down, so every Db2 and Informix alert is blind"
+          runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#corewatchexporterdown"

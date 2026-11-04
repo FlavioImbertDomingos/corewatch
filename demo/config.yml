@@ -1,3 +1,5 @@
+# Exporter config for the Compose demo. Every demo target is listed here;
+# COREWATCH_ENGINES (set by bin/corewatch-demo) decides which are monitored.
 cache_seconds: 15
 optional_queries: [diag_history]
 databases:
@@ -6,6 +8,19 @@ databases:
     port: 50000
     user: db2inst1             # demo only; use a dedicated user in production
     password_env: DB2_PASSWORD
+    labels:
+      client: demo-cu
+      environment: production
+  # More Db2 databases on the same instance: copy the entry and change name.
+
+  # Informix is monitored per server, through sysmaster, over DRDA (port 9089).
+  # name is the server's DBSERVERNAME and becomes the server="..." label.
+  - name: informix
+    engine: informix
+    host: informix
+    port: 9089
+    user: corewatch            # least-privilege OS user created by demo/informix/post_init.sh
+    password_env: COREWATCH_INFORMIX_PASSWORD
     labels:
       client: demo-cu
       environment: production

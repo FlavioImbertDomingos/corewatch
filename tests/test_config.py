@@ -56,3 +56,34 @@ def test_label_names_are_the_union():
         ]
     }
     assert parse_config(raw, env={"PW": "x"}).label_names == ["client", "environment"]
+
+
+def test_informix_target_defaults():
+    raw = {"databases": [{"name": "ifx_prod", "engine": "informix", "host": "ifx1", "user": "corewatch",
+                          "password_env": "PW"}]}
+    db = parse_config(raw, env={"PW": "x"}).databases[0]
+    assert (db.engine, db.port, db.connect_database) == ("informix", 9089, "sysmaster")
+    assert db.dsn().startswith("DATABASE=sysmaster;HOSTNAME=ifx1;PORT=9089;")
+
+
+def test_unknown_engine():
+    raw = {"databases": [dict(BASE["databases"][0], engine="oracle")]}
+    with pytest.raises(ConfigError, match="unknown engine 'oracle'"):
+        parse_config(raw, env={"PW": "x"})
+
+
+def test_same_name_on_two_engines_is_allowed():
+    raw = {"databases": [BASE["databases"][0], dict(BASE["databases"][0], engine="informix")]}
+    assert len(parse_config(raw, env={"PW": "x"}).databases) == 2
+
+
+def test_select_engines_before_reading_passwords():
+    raw = {"databases": [BASE["databases"][0],
+                         {"name": "ifx", "engine": "informix", "host": "i", "user": "u", "password_env": "IFX_PW"}]}
+    # IFX_PW is not set, which is fine when only Db2 is selected
+    assert [d.engine for d in parse_config(raw, env={"PW": "x"}, engines="db2").databases] == ["db2"]
+    assert len(parse_config(raw, env={"PW": "x", "IFX_PW": "y"}, engines="").databases) == 2
+    with pytest.raises(ConfigError, match="unknown engine"):
+        parse_config(raw, env={"PW": "x"}, engines="mysql")
+    with pytest.raises(ConfigError, match="no targets left"):
+        parse_config({"databases": BASE["databases"]}, env={"PW": "x"}, engines="informix")

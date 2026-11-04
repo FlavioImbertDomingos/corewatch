@@ -1,0 +1,172 @@
+# Informix alerts. Thresholds are starting points; tune them per server.
+#
+# Informix monitoring is per server (instance), so every alert carries
+# server="<DBSERVERNAME>" and db_host, not a database label.
+groups:
+  - name: informix
+    rules:
+      - alert: InformixDown
+        expr: informix_up == 0
+        for: 1m
+        labels: { severity: page, layer: informix }
+        annotations:
+          summary: "Informix server {{ $labels.server }} on {{ $labels.db_host }} is not answering"
+          runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#informixdown"
+
+      - alert: InformixNotOnline
+        expr: informix_server_mode != 5
+        for: 2m
+        labels: { severity: page, layer: informix }
+        annotations:
+          summary: "Informix server {{ $labels.server }} is not On-Line (sh_mode {{ $value }}); applications cannot work normally"
+          runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#informixnotonline"
+
+      - alert: InformixPortUnreachable
+        expr: probe_success{job="db-port", engine="informix"} == 0 and on(engine) corewatch_engine_enabled == 1
+        for: 2m
+        labels: { severity: page, layer: informix }
+        annotations:
+          summary: "Nothing is listening on the Informix port {{ $labels.instance }}"
+          runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#informixportunreachable"
+
+      - alert: InformixQueryFailing
+        expr: informix_query_success == 0
+        for: 10m
+        labels: { severity: ticket, layer: monitoring }
+        annotations:
+          summary: "Monitoring query {{ $labels.query }} fails on Informix server {{ $labels.server }}"
+          runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#informixqueryfailing"
+
+      # A logical log can be reused only when it is backed up, is not current and
+      # holds no part of an open transaction. When none is left the server blocks.
+      - alert: InformixLogicalLogsHigh
+        expr: informix_logical_log_utilization_ratio > 0.70
+        for: 5m
+        labels: { severity: ticket, layer: informix }
+        annotations:
+          summary: "{{ $value | humanizePercentage }} of logical logs on {{ $labels.server }} cannot be reused yet"
+          runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#informixlogs"
+
+      - alert: InformixLogicalLogsCritical
+        expr: informix_logical_log_utilization_ratio > 0.85
+        for: 2m
+        labels: { severity: page, layer: informix }
+        annotations:
+          summary: "{{ $value | humanizePercentage }} of logical logs on {{ $labels.server }} are in use; the server blocks all updates when none is free"
+          runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#informixlogs"
+
+      - alert: InformixLogBackupStalled
+        expr: informix_logical_logs_not_backed_up >= 2
+        for: 15m
+        labels: { severity: ticket, layer: informix }
+        annotations:
+          summary: "{{ $value }} full logical logs on {{ $labels.server }} are waiting to be backed up; log backup is not keeping up"
+          runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#informixlogbackup"
+
+      # At LTXHWM (70% by default) the server rolls the transaction back itself,
+      # and the rollback needs log space too; at LTXEHWM it gives the rollback
+      # exclusive use of the logs. Alerting at 40% leaves time to act.
+      - alert: InformixLongTransaction
+        expr: informix_oldest_transaction_log_span / informix_logical_logs > 0.40
+        for: 2m
+        labels: { severity: page, layer: informix }
+        annotations:
+          summary: "The oldest open transaction on {{ $labels.server }} spans {{ $value | humanizePercentage }} of the logical logs; long-transaction rollback starts at LTXHWM"
+          runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#informixlongtransaction"
+
+      - alert: InformixDbspaceNearlyFull
+        expr: informix_dbspace_utilization_ratio > 0.90 and on(server, db_host, dbspace) informix_dbspace_info{type="data"}
+        for: 10m
+        labels: { severity: ticket, layer: informix }
+        annotations:
+          summary: "Dbspace {{ $labels.dbspace }} is {{ $value | humanizePercentage }} full on {{ $labels.server }}"
+          runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#informixdbspace"
+
+      - alert: InformixDbspaceFull
+        expr: informix_dbspace_utilization_ratio > 0.97 and on(server, db_host, dbspace) informix_dbspace_info{type="data"}
+        for: 5m
+        labels: { severity: page, layer: informix }
+        annotations:
+          summary: "Dbspace {{ $labels.dbspace }} is almost out of room on {{ $labels.server }}; inserts into its tables will fail"
+          runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#informixdbspace"
+
+      - alert: InformixChunkOffline
+        expr: informix_chunks_offline > 0
+        for: 1m
+        labels: { severity: page, layer: informix }
+        annotations:
+          summary: "{{ $value }} chunk(s) of dbspace {{ $labels.dbspace }} are down on {{ $labels.server }}"
+          runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#informixchunkoffline"
+
+      - alert: InformixBackupOverdue
+        expr: informix_backup_level0_age_seconds > 26 * 3600
+        for: 15m
+        labels: { severity: ticket, layer: informix }
+        annotations:
+          summary: "Last level-0 archive of dbspace {{ $labels.dbspace }} on {{ $labels.server }} was {{ $value | humanizeDuration }} ago"
+          runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#informixbackup"
+
+      - alert: InformixBackupMissedTwice
+        expr: informix_backup_level0_age_seconds > 50 * 3600
+        for: 15m
+        labels: { severity: page, layer: informix }
+        annotations:
+          summary: "No level-0 archive of dbspace {{ $labels.dbspace }} on {{ $labels.server }} for {{ $value | humanizeDuration }}"
+          runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#informixbackup"
+
+      - alert: InformixNoBackupOnRecord
+        expr: informix_backup_found == 0
+        for: 1h
+        labels: { severity: ticket, layer: informix }
+        annotations:
+          summary: "Dbspace {{ $labels.dbspace }} on {{ $labels.server }} has never had a level-0 archive"
+          runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#informixbackup"
+
+      - alert: InformixLockWaits
+        expr: informix_sessions_waiting_on_locks > 5
+        for: 5m
+        labels: { severity: ticket, layer: informix }
+        annotations:
+          summary: "{{ $value }} sessions have been waiting on locks on {{ $labels.server }}"
+          runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#informixlocks"
+
+      - alert: InformixDeadlocks
+        expr: increase(informix_deadlocks_total[15m]) > 3
+        labels: { severity: ticket, layer: informix }
+        annotations:
+          summary: "{{ $value | humanize }} deadlocks in 15 minutes on {{ $labels.server }}"
+          runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#informixlocks"
+
+      # The lock, user and transaction tables have hard limits (LOCKS, user
+      # threads, transactions). An overflow means a session got an error.
+      - alert: InformixTableOverflow
+        expr: |
+          label_replace(increase(informix_lock_table_overflows_total[15m]) > 0, "table", "lock", "", "")
+            or label_replace(increase(informix_user_table_overflows_total[15m]) > 0, "table", "user", "", "")
+            or label_replace(increase(informix_transaction_table_overflows_total[15m]) > 0, "table", "transaction", "", "")
+        labels: { severity: page, layer: informix }
+        annotations:
+          summary: "The Informix {{ $labels.table }} table on {{ $labels.server }} overflowed {{ $value | humanize }} times in 15 minutes"
+          runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#informixoverflow"
+
+      - alert: InformixCheckpointBlocking
+        expr: informix_checkpoint_last_block_seconds > 2
+        labels: { severity: ticket, layer: informix }
+        annotations:
+          summary: "The last checkpoint on {{ $labels.server }} blocked transactions for {{ $value | humanizeDuration }}"
+          runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#informixcheckpoint"
+
+      - alert: InformixRestarted
+        expr: informix_uptime_seconds < 600 and informix_uptime_seconds offset 15m > 600
+        labels: { severity: ticket, layer: informix }
+        annotations:
+          summary: "Informix server {{ $labels.server }} was restarted in the last 10 minutes"
+          runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#informixrestarted"
+
+      - alert: InformixDatabaseNotLogged
+        expr: informix_database_info{logging="none"} == 1
+        for: 1h
+        labels: { severity: ticket, layer: informix }
+        annotations:
+          summary: "Database {{ $labels.dbname }} on {{ $labels.server }} has no transaction logging: no rollback, no point-in-time restore, no HDR"
+          runbook_url: "https://github.com/FlavioImbertDomingos/corewatch/blob/main/docs/runbooks.md#informixnotlogged"

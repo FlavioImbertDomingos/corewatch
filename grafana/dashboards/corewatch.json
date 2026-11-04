@@ -1,15 +1,16 @@
 {
   "uid": "corewatch",
-  "title": "corewatch: Db2, AIX and Linux",
+  "title": "corewatch: Db2, Informix, AIX and Linux",
   "tags": [
     "corewatch",
     "db2",
+    "informix",
     "aix",
     "linux"
   ],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 4,
   "refresh": "30s",
   "time": {
     "from": "now-3h",
@@ -19,7 +20,7 @@
     "list": [
       {
         "name": "database",
-        "label": "Database",
+        "label": "Db2 database",
         "type": "query",
         "datasource": {
           "type": "prometheus",
@@ -37,17 +38,435 @@
           "value": "$__all"
         },
         "allValue": ".*"
+      },
+      {
+        "name": "server",
+        "label": "Informix server",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "query": {
+          "query": "label_values(informix_up, server)",
+          "refId": "B"
+        },
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "allValue": ".*"
       }
     ]
   },
   "panels": [
+    {
+      "title": "Estate overview",
+      "type": "row",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      },
+      "id": 100
+    },
+    {
+      "title": "Db2 databases up",
+      "type": "stat",
+      "description": "Db2 databases the exporter can reach, out of those it is configured to monitor. If the two numbers differ, look at the Db2 row below or the Db2Down alert.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "count(db2_up == 1) or vector(0)",
+          "legendFormat": "up",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "count(db2_up) or vector(0)",
+          "legendFormat": "monitored",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "id": 101
+    },
+    {
+      "title": "Informix servers up",
+      "type": "stat",
+      "description": "Informix servers the exporter can reach, out of those it is configured to monitor. Monitoring is per server (instance), through the sysmaster database.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "count(informix_up == 1) or vector(0)",
+          "legendFormat": "up",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "count(informix_up) or vector(0)",
+          "legendFormat": "monitored",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "gridPos": {
+        "x": 4,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "id": 102
+    },
+    {
+      "title": "Firing pages",
+      "type": "stat",
+      "description": "Alerts with severity page that are firing now: a member-facing outage, or one that is close. Details in Alertmanager (http://localhost:9093).",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "count(ALERTS{alertstate=\"firing\", severity=\"page\"}) or vector(0)",
+          "legendFormat": "pages",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "id": 103
+    },
+    {
+      "title": "Firing tickets",
+      "type": "stat",
+      "description": "Alerts with severity ticket that are firing now: fix during business hours.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "count(ALERTS{alertstate=\"firing\", severity=\"ticket\"}) or vector(0)",
+          "legendFormat": "tickets",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "id": 104
+    },
+    {
+      "title": "Monitoring queries failing",
+      "type": "stat",
+      "description": "Monitoring queries that failed on their last run, across both engines. Usually a missing privilege or a column that does not exist on an older release. The other queries keep working.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "count(db2_query_success == 0 or informix_query_success == 0) or vector(0)",
+          "legendFormat": "failing",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "id": 105
+    },
+    {
+      "title": "Exporter",
+      "type": "stat",
+      "description": "1 when Prometheus can scrape the corewatch exporter. When it is 0 every database alert is blind, which is why CorewatchExporterDown pages.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "up{job=\"corewatch\"}",
+          "legendFormat": "exporter",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "Scraping",
+                  "color": "green"
+                },
+                "0": {
+                  "text": "Down",
+                  "color": "red"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "id": 106
+    },
     {
       "id": 1,
       "type": "row",
       "title": "Db2",
       "gridPos": {
         "x": 0,
-        "y": 0,
+        "y": 5,
         "w": 24,
         "h": 1
       },
@@ -64,7 +483,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 1,
+        "y": 6,
         "w": 4,
         "h": 4
       },
@@ -110,7 +529,8 @@
         "colorMode": "background",
         "graphMode": "none",
         "textMode": "value_and_name"
-      }
+      },
+      "description": "1 means the exporter connected to this database and ran its queries on the last scrape. 0 means it could not: the database is deactivated or down, the instance is stopped, the network path is broken, or the credentials were rejected. Check this first when other panels go blank."
     },
     {
       "id": 3,
@@ -122,7 +542,7 @@
       },
       "gridPos": {
         "x": 4,
-        "y": 1,
+        "y": 6,
         "w": 4,
         "h": 4
       },
@@ -172,7 +592,8 @@
         "colorMode": "background",
         "graphMode": "none",
         "textMode": "value_and_name"
-      }
+      },
+      "description": "Share of the active transaction log space currently in use. Space is freed only when the oldest open transaction commits or rolls back, so a steady climb usually means a long-running uncommitted transaction (see Oldest open transaction). At 100% new work fails with SQL0964C, transaction log full."
     },
     {
       "id": 4,
@@ -184,7 +605,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 1,
+        "y": 6,
         "w": 4,
         "h": 4
       },
@@ -234,7 +655,8 @@
         "colorMode": "background",
         "graphMode": "none",
         "textMode": "value_and_name"
-      }
+      },
+      "description": "Time since the most recent successful backup recorded in the database's recovery history. No value for a database means no successful backup has been recorded for it. A large value means a restore would lose everything since that point unless archived logs are available for rollforward."
     },
     {
       "id": 5,
@@ -246,7 +668,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 1,
+        "y": 6,
         "w": 4,
         "h": 4
       },
@@ -296,7 +718,8 @@
         "colorMode": "background",
         "graphMode": "none",
         "textMode": "value_and_name"
-      }
+      },
+      "description": "Number of agents (connections doing work) that are blocked right now waiting for a lock another application holds. Short spikes are normal; a value that stays above 0 means something is holding locks too long and other work is queued behind it."
     },
     {
       "id": 6,
@@ -308,7 +731,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 1,
+        "y": 6,
         "w": 4,
         "h": 4
       },
@@ -358,7 +781,8 @@
         "colorMode": "background",
         "graphMode": "none",
         "textMode": "value_and_name"
-      }
+      },
+      "description": "Age of the oldest unit of work that has not yet committed or rolled back. Long transactions hold their locks and pin log space for their whole lifetime, so this is the usual cause of rising log usage and lock waits. 0 s means nothing is open."
     },
     {
       "id": 7,
@@ -370,7 +794,7 @@
       },
       "gridPos": {
         "x": 20,
-        "y": 1,
+        "y": 6,
         "w": 4,
         "h": 4
       },
@@ -433,7 +857,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 5,
+        "y": 10,
         "w": 8,
         "h": 7
       },
@@ -497,7 +921,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 5,
+        "y": 10,
         "w": 8,
         "h": 7
       },
@@ -526,7 +950,8 @@
         "tooltip": {
           "mode": "multi"
         }
-      }
+      },
+      "description": "Number of application connections to each database. The exporter's own connection is included, so 1 is the idle baseline. Compare against the expected pool size of the applications using the database; sudden jumps often mean connection leaks or a retry storm."
     },
     {
       "id": 10,
@@ -538,7 +963,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 5,
+        "y": 10,
         "w": 8,
         "h": 7
       },
@@ -576,7 +1001,8 @@
         "tooltip": {
           "mode": "multi"
         }
-      }
+      },
+      "description": "Rate of committed and rolled-back transactions. Commits show how much work the database is doing. Rollbacks are expected occasionally, but if they rise relative to commits, applications are hitting errors, deadlocks, or lock timeouts."
     },
     {
       "id": 11,
@@ -588,7 +1014,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 12,
+        "y": 17,
         "w": 8,
         "h": 7
       },
@@ -617,7 +1043,8 @@
         "tooltip": {
           "mode": "multi"
         }
-      }
+      },
+      "description": "Total time all applications spent waiting on locks, per second of clock time. 0 means no contention. A value above 1 s per second means several applications were waiting at the same time. Read it together with Agents waiting on locks."
     },
     {
       "id": 12,
@@ -629,7 +1056,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 12,
+        "y": 17,
         "w": 8,
         "h": 7
       },
@@ -667,7 +1094,8 @@
         "tooltip": {
           "mode": "multi"
         }
-      }
+      },
+      "description": "Counts over the last 15 minutes. A deadlock is two applications each waiting on the other; Db2 breaks it by rolling one back (SQL0911N reason 2). A lock timeout is an application giving up after waiting longer than LOCKTIMEOUT (SQL0911N reason 68). Either one means an application got an error."
     },
     {
       "id": 13,
@@ -679,7 +1107,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 12,
+        "y": 17,
         "w": 8,
         "h": 7
       },
@@ -708,7 +1136,995 @@
         "tooltip": {
           "mode": "multi"
         }
-      }
+      },
+      "description": "Share of page requests served from memory instead of being read from disk. Busy transactional databases usually sit above 95%. It is low right after a database is activated because the cache starts empty, and a lasting drop suggests the buffer pool is too small for the working set."
+    },
+    {
+      "title": "Informix",
+      "type": "row",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 24,
+        "h": 1
+      },
+      "id": 107
+    },
+    {
+      "title": "Server up",
+      "type": "stat",
+      "description": "1 means the exporter logged in to sysmaster over DRDA and ran its test query. 0 means it could not: the server is down or not On-Line, the DRDA listener (drsoctcp) is not running, the network path is broken, or the monitoring user was refused. Check this first when other Informix panels go blank.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "informix_up{server=~\"$server\"}",
+          "legendFormat": "{{server}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 25,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "id": 108
+    },
+    {
+      "title": "Server mode",
+      "type": "stat",
+      "description": "From sysshmvals.sh_mode, the same mode onstat - prints. On-Line is the only mode in which applications work normally. Quiescent, single-user, recovery or shutdown show as Not On-Line and InformixNotOnline pages.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "informix_server_online{server=~\"$server\"}",
+          "legendFormat": "{{server}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "On-Line",
+                  "color": "green"
+                },
+                "0": {
+                  "text": "Not On-Line",
+                  "color": "red"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "gridPos": {
+        "x": 4,
+        "y": 25,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "id": 109
+    },
+    {
+      "title": "Logical logs in use",
+      "type": "stat",
+      "description": "Share of logical logs that cannot be reused yet. A log is reusable only when it is backed up, is not the current log and holds no part of an open transaction. At 100% the server blocks every update until a log is freed. Ticket at 70%, page at 85%.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "informix_logical_log_utilization_ratio{server=~\"$server\"}",
+          "legendFormat": "{{server}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.7
+              },
+              {
+                "color": "red",
+                "value": 0.85
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 25,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "id": 110
+    },
+    {
+      "title": "Oldest transaction spans",
+      "type": "stat",
+      "description": "How much of the logical log space the oldest open transaction covers. At LTXHWM (70% by default) the server rolls the transaction back itself, and the rollback needs log space too. corewatch pages at 40% to leave time to find the session (onstat -x, onstat -u) and end it cleanly.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "informix_oldest_transaction_log_span{server=~\"$server\"} / informix_logical_logs{server=~\"$server\"}",
+          "legendFormat": "{{server}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.25
+              },
+              {
+                "color": "red",
+                "value": 0.4
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 25,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "id": 111
+    },
+    {
+      "title": "Since last level-0 archive",
+      "type": "stat",
+      "description": "Age of the oldest level-0 archive across the server's dbspaces (temporary dbspaces are never archived). A restore can only start from a level-0. Ticket after 26 hours, page after 50. Run bin/corewatch-demo backup informix to record a new one in the demo.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by (server) (informix_backup_level0_age_seconds{server=~\"$server\"})",
+          "legendFormat": "{{server}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 93600
+              },
+              {
+                "color": "red",
+                "value": 180000
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 25,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "id": 112
+    },
+    {
+      "title": "Sessions waiting on locks",
+      "type": "stat",
+      "description": "Sessions blocked right now waiting for a lock another session holds (sysrstcb.lkwait). Short spikes are normal. A value that stays above 0 means something holds locks too long; onstat -k shows the locks and onstat -u the waiters. Ticket when more than 5 wait for 5 minutes.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "informix_sessions_waiting_on_locks{server=~\"$server\"}",
+          "legendFormat": "{{server}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 6
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 25,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "id": 113
+    },
+    {
+      "title": "Dbspaces, share used",
+      "type": "bargauge",
+      "description": "Used share of each data and temporary dbspace, summed over its chunks. A full data dbspace makes inserts into its tables fail. Temporary dbspaces fill and empty with sorts and are not alerted on. Blobspaces and sbspaces count free space differently and are not shown.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "informix_dbspace_utilization_ratio{server=~\"$server\"}",
+          "legendFormat": "{{server}} {{dbspace}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.9
+              },
+              {
+                "color": "red",
+                "value": 0.97
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "horizontal",
+        "displayMode": "basic"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 29,
+        "w": 8,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "id": 114
+    },
+    {
+      "title": "Sessions",
+      "type": "timeseries",
+      "description": "User sessions connected to the server (syssessions). The exporter's own session is included. Compare with the applications' expected pool sizes; a sudden jump often means a connection leak or a retry storm.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "informix_sessions_current{server=~\"$server\"}",
+          "legendFormat": "{{server}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 29,
+        "w": 8,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "id": 115
+    },
+    {
+      "title": "Commits and rollbacks per second",
+      "type": "timeseries",
+      "description": "From sysprofile (the counters onstat -p prints). Commits show how much work the server does. Rollbacks are expected now and then; a rising share means applications are hitting errors, deadlocks or lock timeouts.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "rate(informix_commits_total{server=~\"$server\"}[5m])",
+          "legendFormat": "{{server}} commits",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "rate(informix_rollbacks_total{server=~\"$server\"}[5m])",
+          "legendFormat": "{{server}} rollbacks",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 29,
+        "w": 8,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "id": 116
+    },
+    {
+      "title": "Logical logs",
+      "type": "timeseries",
+      "description": "Logical logs in use and full logs waiting to be backed up. If 'waiting for backup' keeps growing, continuous log backup (ontape -c, onbar or the ALARMPROGRAM) has stopped, and the server will block when the last free log fills.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "informix_logical_logs{server=~\"$server\"} - informix_logical_logs_free{server=~\"$server\"}",
+          "legendFormat": "{{server}} in use",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "informix_logical_logs_not_backed_up{server=~\"$server\"}",
+          "legendFormat": "{{server}} waiting for backup",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 36,
+        "w": 8,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "id": 117
+    },
+    {
+      "title": "Deadlocks and lock timeouts (15 min)",
+      "type": "timeseries",
+      "description": "Counts over the last 15 minutes. A deadlock is two sessions each waiting on the other; Informix breaks it by returning error -143 to one of them. A lock timeout is a session that waited longer than its SET LOCK MODE TO WAIT limit (error -154). Either one means an application got an error.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "increase(informix_deadlocks_total{server=~\"$server\"}[15m])",
+          "legendFormat": "{{server}} deadlocks",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "increase(informix_lock_timeouts_total{server=~\"$server\"}[15m])",
+          "legendFormat": "{{server}} lock timeouts",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 36,
+        "w": 8,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "id": 118
+    },
+    {
+      "title": "Buffer pool hit ratio",
+      "type": "timeseries",
+      "description": "Share of page reads served from the buffer pool instead of disk (1 - dskreads / bufreads, as onstat -p reports %cached). Busy OLTP servers usually sit above 95%. A lasting drop suggests BUFFERPOOL is too small for the working set.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "1 - rate(informix_disk_reads_total{server=~\"$server\"}[5m]) / rate(informix_buffer_reads_total{server=~\"$server\"}[5m])",
+          "legendFormat": "{{server}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 36,
+        "w": 8,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "id": 119
+    },
+    {
+      "title": "Checkpoints",
+      "type": "timeseries",
+      "description": "Duration of the most recent checkpoint and how long it blocked transactions (syscheckpoint). Non-blocking checkpoints should block for close to zero. Long blocks point at slow disks or too many dirty buffers.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "informix_checkpoint_last_duration_seconds{server=~\"$server\"}",
+          "legendFormat": "{{server}} duration",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "informix_checkpoint_last_block_seconds{server=~\"$server\"}",
+          "legendFormat": "{{server}} transactions blocked",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 43,
+        "w": 8,
+        "h": 6
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "id": 120
+    },
+    {
+      "title": "Chunks offline",
+      "type": "stat",
+      "description": "Chunks marked down. The data in an offline chunk cannot be read, and tables in that dbspace return errors. Usually a disk, path or permission problem; with mirroring the mirror keeps serving. Pages at once.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (server) (informix_chunks_offline{server=~\"$server\"})",
+          "legendFormat": "{{server}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 43,
+        "w": 4,
+        "h": 6
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "id": 121
+    },
+    {
+      "title": "Uptime",
+      "type": "stat",
+      "description": "Time since the server was started (sysshmvals.sh_boottime). A restart that nobody planned shows up here and as InformixRestarted.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "informix_uptime_seconds{server=~\"$server\"}",
+          "legendFormat": "{{server}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 43,
+        "w": 4,
+        "h": 6
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "id": 122
+    },
+    {
+      "title": "HA role",
+      "type": "stat",
+      "description": "Role from sysha_type: standard (no replication), primary, hdr_secondary, sd_secondary or rs_secondary.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "informix_ha_info{server=~\"$server\"}",
+          "legendFormat": "{{role}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "name"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 43,
+        "w": 4,
+        "h": 6
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "id": 123
+    },
+    {
+      "title": "Databases without logging",
+      "type": "stat",
+      "description": "Databases created without transaction logging cannot roll back, cannot be restored to a point in time and cannot replicate with HDR or RSS. Sometimes deliberate for scratch data; worth knowing about.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "count by (server) (informix_database_info{server=~\"$server\", logging=\"none\"}) or on() vector(0)",
+          "legendFormat": "unlogged",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 43,
+        "w": 4,
+        "h": 6
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "id": 124
     },
     {
       "id": 14,
@@ -716,7 +2132,7 @@
       "title": "Batch jobs",
       "gridPos": {
         "x": 0,
-        "y": 19,
+        "y": 49,
         "w": 24,
         "h": 1
       },
@@ -733,7 +2149,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 20,
+        "y": 50,
         "w": 8,
         "h": 5
       },
@@ -779,7 +2195,8 @@
         "colorMode": "background",
         "graphMode": "none",
         "textMode": "value_and_name"
-      }
+      },
+      "description": "Exit code of each batch job's last finished run, written by corewatch_job.sh. Anything but 0 is a failure and JobFailed pages once the job is no longer running."
     },
     {
       "id": 16,
@@ -791,7 +2208,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 20,
+        "y": 50,
         "w": 8,
         "h": 5
       },
@@ -821,7 +2238,8 @@
         "colorMode": "background",
         "graphMode": "none",
         "textMode": "value_and_name"
-      }
+      },
+      "description": "Time since each job last succeeded. Compared with the job's --max-age, this is what lets JobOverdue catch a job that never started, which a failure alert alone cannot do."
     },
     {
       "id": 17,
@@ -833,7 +2251,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 20,
+        "y": 50,
         "w": 8,
         "h": 5
       },
@@ -862,7 +2280,8 @@
         "tooltip": {
           "mode": "multi"
         }
-      }
+      },
+      "description": "How long each job's last run took. JobRunningLong opens a ticket when a running job passes twice its 7-day average."
     },
     {
       "id": 18,
@@ -870,7 +2289,7 @@
       "title": "AIX hosts",
       "gridPos": {
         "x": 0,
-        "y": 25,
+        "y": 55,
         "w": 24,
         "h": 1
       },
@@ -887,7 +2306,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 26,
+        "y": 56,
         "w": 6,
         "h": 5
       },
@@ -933,7 +2352,8 @@
         "colorMode": "background",
         "graphMode": "none",
         "textMode": "value_and_name"
-      }
+      },
+      "description": "Permanent (type P) entries in the AIX error report by class: H is hardware, S software. Hardware errors page: a disk, adapter or memory fault usually shows here first."
     },
     {
       "id": 20,
@@ -945,7 +2365,7 @@
       },
       "gridPos": {
         "x": 6,
-        "y": 26,
+        "y": 56,
         "w": 6,
         "h": 5
       },
@@ -991,7 +2411,8 @@
         "colorMode": "background",
         "graphMode": "none",
         "textMode": "value_and_name"
-      }
+      },
+      "description": "MPIO paths (lspath) in any state other than Enabled. One failed path means the disk has lost its redundancy even though it still works. Pages after 5 minutes."
     },
     {
       "id": 21,
@@ -1003,7 +2424,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 26,
+        "y": 56,
         "w": 6,
         "h": 5
       },
@@ -1049,7 +2470,8 @@
         "colorMode": "background",
         "graphMode": "none",
         "textMode": "value_and_name"
-      }
+      },
+      "description": "Stale physical partitions per volume group (lsvg): the LVM mirror copies are out of sync, usually after a disk error. Resynchronize with syncvg once the cause is fixed."
     },
     {
       "id": 22,
@@ -1061,7 +2483,7 @@
       },
       "gridPos": {
         "x": 18,
-        "y": 26,
+        "y": 56,
         "w": 6,
         "h": 5
       },
@@ -1091,7 +2513,8 @@
         "colorMode": "none",
         "graphMode": "none",
         "textMode": "name"
-      }
+      },
+      "description": "AIX technology level and service pack (oslevel -s). Useful when comparing partitions before patching."
     },
     {
       "id": 23,
@@ -1103,7 +2526,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 31,
+        "y": 61,
         "w": 12,
         "h": 7
       },
@@ -1154,7 +2577,8 @@
         },
         "orientation": "horizontal",
         "displayMode": "basic"
-      }
+      },
+      "description": "Used share of each filesystem. Ticket at 90%, page at 97%. On Linux an extra alert projects the last hour's growth and warns four hours before a filesystem fills."
     },
     {
       "id": 24,
@@ -1166,7 +2590,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 31,
+        "y": 61,
         "w": 12,
         "h": 7
       },
@@ -1195,7 +2619,8 @@
         "tooltip": {
           "mode": "multi"
         }
-      }
+      },
+      "description": "AIX paging space in use (lsps). Sustained use above 70% means real memory is short and performance is already suffering."
     },
     {
       "id": 25,
@@ -1203,7 +2628,7 @@
       "title": "Linux hosts",
       "gridPos": {
         "x": 0,
-        "y": 38,
+        "y": 68,
         "w": 24,
         "h": 1
       },
@@ -1220,7 +2645,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 39,
+        "y": 69,
         "w": 12,
         "h": 7
       },
@@ -1271,7 +2696,8 @@
         },
         "orientation": "horizontal",
         "displayMode": "basic"
-      }
+      },
+      "description": "Used share of each filesystem. Ticket at 90%, page at 97%. On Linux an extra alert projects the last hour's growth and warns four hours before a filesystem fills."
     },
     {
       "id": 27,
@@ -1283,7 +2709,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 39,
+        "y": 69,
         "w": 6,
         "h": 7
       },
@@ -1312,7 +2738,8 @@
         "tooltip": {
           "mode": "multi"
         }
-      }
+      },
+      "description": "Share of CPU time not idle, per Linux host, from node_exporter."
     },
     {
       "id": 28,
@@ -1324,7 +2751,7 @@
       },
       "gridPos": {
         "x": 18,
-        "y": 39,
+        "y": 69,
         "w": 6,
         "h": 7
       },
@@ -1353,7 +2780,8 @@
         "tooltip": {
           "mode": "multi"
         }
-      }
+      },
+      "description": "Memory the kernel can hand to applications without swapping, as a share of the total."
     },
     {
       "id": 29,
@@ -1365,7 +2793,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 46,
+        "y": 76,
         "w": 6,
         "h": 4
       },
@@ -1411,7 +2839,8 @@
         "colorMode": "background",
         "graphMode": "none",
         "textMode": "value_and_name"
-      }
+      },
+      "description": "1 when the host has patches installed that need a reboot to take effect. Ticket after a week."
     },
     {
       "id": 30,
@@ -1423,7 +2852,7 @@
       },
       "gridPos": {
         "x": 6,
-        "y": 46,
+        "y": 76,
         "w": 6,
         "h": 4
       },
@@ -1469,7 +2898,8 @@
         "colorMode": "background",
         "graphMode": "none",
         "textMode": "value_and_name"
-      }
+      },
+      "description": "Linux multipath paths in failed state. As on AIX, one failed path means a disk has lost its redundancy. Pages after 5 minutes."
     },
     {
       "id": 31,
@@ -1481,7 +2911,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 46,
+        "y": 76,
         "w": 12,
         "h": 4
       },
@@ -1510,7 +2940,9 @@
         "tooltip": {
           "mode": "multi"
         }
-      }
+      },
+      "description": "Firing alerts by severity over time, from Prometheus's own ALERTS series."
     }
-  ]
+  ],
+  "description": "Db2 and Informix database health, batch jobs, and the AIX and Linux hosts underneath. Hover the (i) next to a panel title for what it shows and when to worry."
 }

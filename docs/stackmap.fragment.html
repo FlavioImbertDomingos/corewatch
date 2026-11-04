@@ -10,6 +10,7 @@
   --ink-soft: #51606e;
   --rule: #c9d2da;
   --db2: #1f5fd0;
+  --ifx: #7a3fc0;
   --aix: #0b7f78;
   --linux: #c2452d;
   --jobs: #9a6a00;
@@ -26,14 +27,14 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --paper: #10161c; --sheet: #161e26; --ink: #e4eaef; --ink-soft: #9aa8b5; --rule: #2e3a46;
-    --db2: #6fa3ff; --aix: #45c4bb; --linux: #ff8a70; --jobs: #e2b23c; --mon: #b8c4cf;
+    --db2: #6fa3ff; --ifx: #c09bff; --aix: #45c4bb; --linux: #ff8a70; --jobs: #e2b23c; --mon: #b8c4cf;
     --page: #ff9a92; --ticket: #e6d27a; --page-bg: #47201d; --ticket-bg: #3a3413; --code-bg: #1f2a34;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --paper: #10161c; --sheet: #161e26; --ink: #e4eaef; --ink-soft: #9aa8b5; --rule: #2e3a46;
-  --db2: #6fa3ff; --aix: #45c4bb; --linux: #ff8a70; --jobs: #e2b23c; --mon: #b8c4cf;
+  --db2: #6fa3ff; --ifx: #c09bff; --aix: #45c4bb; --linux: #ff8a70; --jobs: #e2b23c; --mon: #b8c4cf;
   --page: #ff9a92; --ticket: #e6d27a; --page-bg: #47201d; --ticket-bg: #3a3413; --code-bg: #1f2a34;
   color-scheme: dark;
 }
@@ -113,11 +114,12 @@ td code { white-space: nowrap; }
 <div class="wrap">
   <header class="head">
     <div class="eyebrow">corewatch documentation</div>
-    <h1>How Db2, AIX and Linux are watched</h1>
+    <h1>How Db2, Informix, AIX and Linux are watched</h1>
     <p class="lede">Drag the drawing to turn it. Pick any part to see what it measures, which alerts it feeds, and the commands to check it by hand. The tables underneath list every signal.</p>
     <div class="filters" role="group" aria-label="Show one layer">
       <button class="chip" id="f-all" data-f="all" aria-pressed="true">Everything</button>
       <button class="chip" id="f-db2" data-f="db2" style="--c: var(--db2)" aria-pressed="false">Db2</button>
+      <button class="chip" id="f-ifx" data-f="ifx" style="--c: var(--ifx)" aria-pressed="false">Informix</button>
       <button class="chip" id="f-aix" data-f="aix" style="--c: var(--aix)" aria-pressed="false">AIX</button>
       <button class="chip" id="f-linux" data-f="linux" style="--c: var(--linux)" aria-pressed="false">Linux</button>
       <button class="chip" id="f-jobs" data-f="jobs" style="--c: var(--jobs)" aria-pressed="false">Batch jobs</button>
@@ -139,7 +141,7 @@ td code { white-space: nowrap; }
 
   <section style="--c: var(--db2)" id="db2">
     <div class="section-head"><span class="swatch"></span><h2>Db2 coverage</h2></div>
-    <p class="note">Collected over SQL by <code>corewatch-db2</code>, which runs off the database server. Queries were run against Db2 12.1 Community Edition on Linux.</p>
+    <p class="note">Collected over SQL by <code>corewatch-exporter</code>, which runs off the database server, one connection per database. Queries were run against Db2 12.1 Community Edition on Linux.</p>
     <div class="tablebox"><table>
       <thead><tr><th>Signal</th><th>Metric</th><th>Alert</th><th>First check</th></tr></thead>
       <tbody>
@@ -156,6 +158,32 @@ td code { white-space: nowrap; }
         <tr><td>Severe diagnostics</td><td><code>db2_diag_messages</code></td><td><span class="sev ticket">ticket</span> any new record</td><td><code>db2diag -H 30m -l Severe,Critical</code></td></tr>
         <tr><td>Listener reachable</td><td><code>probe_success</code></td><td><span class="sev page">page</span> 2 min</td><td><code>db2 get dbm cfg | grep SVCENAME</code></td></tr>
         <tr><td>Throughput and cache</td><td><code>db2_commits_total</code>, <code>db2_bufferpool_*_reads_total</code></td><td>dashboard only</td><td></td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section style="--c: var(--ifx)" id="ifx">
+    <div class="section-head"><span class="swatch"></span><h2>Informix coverage</h2></div>
+    <p class="note">Collected over DRDA by <code>corewatch-exporter</code> from the <code>sysmaster</code> database: one connection per server, not per database, as a user with <code>CONNECT</code> on sysmaster only. Queries were run against Informix 15.0.1 Developer Edition on Linux, and the long-transaction, lock-wait and archive signals were checked by causing each condition.</p>
+    <div class="tablebox"><table>
+      <thead><tr><th>Signal</th><th>Metric</th><th>Alert</th><th>First check</th></tr></thead>
+      <tbody>
+        <tr><td>Server answers</td><td><code>informix_up</code></td><td><span class="sev page">page</span> InformixDown, 1 min</td><td><code>onstat -</code></td></tr>
+        <tr><td>Server mode</td><td><code>informix_server_mode</code></td><td><span class="sev page">page</span> not On-Line, 2 min</td><td><code>onstat -</code>, <code>onmode -m</code></td></tr>
+        <tr><td>Logical logs in use</td><td><code>informix_logical_log_utilization_ratio</code></td><td><span class="sev ticket">ticket</span> 70% &nbsp; <span class="sev page">page</span> 85%</td><td><code>onstat -l</code></td></tr>
+        <tr><td>Log backup keeping up</td><td><code>informix_logical_logs_not_backed_up</code></td><td><span class="sev ticket">ticket</span> 2 or more for 15 min</td><td><code>onstat -l</code>, <code>ontape -a</code></td></tr>
+        <tr><td>Long transaction</td><td><code>informix_oldest_transaction_log_span</code></td><td><span class="sev page">page</span> spans 40% of the logs, 2 min</td><td><code>onstat -x</code>, <code>onstat -u</code></td></tr>
+        <tr><td>Data dbspace use</td><td><code>informix_dbspace_utilization_ratio</code></td><td><span class="sev ticket">ticket</span> 90% &nbsp; <span class="sev page">page</span> 97%</td><td><code>onstat -d</code></td></tr>
+        <tr><td>Chunk down</td><td><code>informix_chunks_offline</code></td><td><span class="sev page">page</span> any, 1 min</td><td><code>onstat -d</code></td></tr>
+        <tr><td>Level-0 archive age</td><td><code>informix_backup_level0_age_seconds</code></td><td><span class="sev ticket">ticket</span> 26 h &nbsp; <span class="sev page">page</span> 50 h</td><td><code>onstat -g arc</code></td></tr>
+        <tr><td>Sessions waiting on locks</td><td><code>informix_sessions_waiting_on_locks</code></td><td><span class="sev ticket">ticket</span> more than 5 for 5 min</td><td><code>onstat -u</code>, <code>onstat -k</code></td></tr>
+        <tr><td>Deadlocks</td><td><code>informix_deadlocks_total</code></td><td><span class="sev ticket">ticket</span> more than 3 in 15 min</td><td><code>onstat -p</code></td></tr>
+        <tr><td>Lock, user, transaction table overflow</td><td><code>informix_*_table_overflows_total</code></td><td><span class="sev page">page</span> any in 15 min</td><td><code>onstat -p</code></td></tr>
+        <tr><td>Checkpoint blocking</td><td><code>informix_checkpoint_last_block_seconds</code></td><td><span class="sev ticket">ticket</span> over 2 s</td><td><code>onstat -g ckp</code></td></tr>
+        <tr><td>Unplanned restart</td><td><code>informix_uptime_seconds</code></td><td><span class="sev ticket">ticket</span> restarted in the last 10 min</td><td><code>onstat -m</code></td></tr>
+        <tr><td>Database without logging</td><td><code>informix_database_info{logging="none"}</code></td><td><span class="sev ticket">ticket</span> 1 h</td><td><code>ondblog unbuf DB</code></td></tr>
+        <tr><td>Listener reachable</td><td><code>probe_success{engine="informix"}</code></td><td><span class="sev page">page</span> 2 min</td><td><code>onstat -g ntt</code></td></tr>
+        <tr><td>Throughput and cache</td><td><code>informix_commits_total</code>, <code>informix_buffer_reads_total</code></td><td>dashboard only</td><td><code>onstat -p</code></td></tr>
       </tbody>
     </table></div>
   </section>
@@ -223,63 +251,73 @@ td code { white-space: nowrap; }
 
   // ---- content ---------------------------------------------------------------
   var NODES = [
-    { id: "db2-aix", layer: "db2", label: "Db2 on AIX", shape: "cyl", pos: [-5.6, 0.75, 0.9],
+    { id: "db2-aix", layer: "db2", label: "Db2 on AIX", shape: "cyl", pos: [-6.3, 0.75, -0.9],
       what: "A Db2 instance on an AIX partition. The exporter connects over TCP as a read-only user and never logs in to the host.",
       metrics: ["db2_up", "db2_log_utilization_ratio", "db2_tablespace_utilization_ratio", "db2_backup_last_success_age_seconds", "db2_locks_waiting", "db2_oldest_uow_age_seconds", "db2_hadr_peer"],
       alerts: [["page", "Db2Down"], ["page", "Db2LogSpaceCritical"], ["page", "Db2TablespaceNotNormal"], ["page", "Db2HadrNotPeer"], ["ticket", "Db2BackupOverdue"], ["ticket", "Db2LockWaits"], ["ticket", "Db2LongTransaction"]],
       cmds: { aix: "su - db2inst1\ndb2pd -\ndb2 list active databases\ndb2diag -H 1h -l Severe,Error\ndf -g; errpt | head", linux: null } },
-    { id: "db2-linux", layer: "db2", label: "Db2 on RHEL", shape: "cyl", pos: [5.6, 0.75, 0.9],
+    { id: "db2-linux", layer: "db2", label: "Db2 on RHEL", shape: "cyl", pos: [6.3, 0.75, -0.9],
       what: "The same Db2, on Red Hat Enterprise Linux. The exporter's queries are identical on both platforms, so dashboards and rules do not care which one a database runs on.",
       metrics: ["db2_up", "db2_log_utilization_ratio", "db2_tablespace_utilization_ratio", "db2_backup_last_success_age_seconds", "db2_locks_waiting", "db2_oldest_uow_age_seconds", "db2_hadr_peer"],
       alerts: [["page", "Db2Down"], ["page", "Db2LogSpaceCritical"], ["page", "Db2TablespaceNotNormal"], ["page", "Db2HadrNotPeer"], ["ticket", "Db2BackupOverdue"], ["ticket", "Db2LockWaits"], ["ticket", "Db2LongTransaction"]],
       cmds: { aix: null, linux: "su - db2inst1\ndb2pd -\ndb2 list active databases\ndb2diag -H 1h -l Severe,Error\ndf -h; journalctl -p err -S -1h" } },
-    { id: "aix-collector", layer: "aix", label: "AIX collector", shape: "box", pos: [-2.6, 0.45, 0.6],
+    { id: "ifx-aix", layer: "ifx", label: "Informix on AIX", shape: "cyl", pos: [-6.3, 0.75, 1.5],
+      what: "An Informix server on an AIX partition. The exporter logs in to its sysmaster database over DRDA as a user with CONNECT on sysmaster only, and never logs in to the host. One connection covers every database on the server.",
+      metrics: ["informix_up", "informix_server_mode", "informix_logical_log_utilization_ratio", "informix_oldest_transaction_log_span", "informix_dbspace_utilization_ratio{dbspace}", "informix_chunks_offline{dbspace}", "informix_backup_level0_age_seconds{dbspace}", "informix_sessions_waiting_on_locks"],
+      alerts: [["page", "InformixDown"], ["page", "InformixLogicalLogsCritical"], ["page", "InformixLongTransaction"], ["page", "InformixChunkOffline"], ["page", "InformixDbspaceFull"], ["ticket", "InformixBackupOverdue"], ["ticket", "InformixLogBackupStalled"], ["ticket", "InformixLockWaits"]],
+      cmds: { aix: "su - informix\nonstat -\nonstat -l      # logical logs: U used, B backed up, C current\nonstat -x      # open transactions\nonstat -d      # dbspaces and chunks\nonstat -g arc  # last archive per dbspace\nonstat -m; errpt | head", linux: null } },
+    { id: "ifx-linux", layer: "ifx", label: "Informix on RHEL", shape: "cyl", pos: [6.3, 0.75, 1.5],
+      what: "The same Informix on Red Hat Enterprise Linux. The sysmaster queries are identical on both platforms, so dashboards and rules do not care which one a server runs on.",
+      metrics: ["informix_up", "informix_server_mode", "informix_logical_log_utilization_ratio", "informix_oldest_transaction_log_span", "informix_dbspace_utilization_ratio{dbspace}", "informix_chunks_offline{dbspace}", "informix_backup_level0_age_seconds{dbspace}", "informix_sessions_waiting_on_locks"],
+      alerts: [["page", "InformixDown"], ["page", "InformixLogicalLogsCritical"], ["page", "InformixLongTransaction"], ["page", "InformixChunkOffline"], ["page", "InformixDbspaceFull"], ["ticket", "InformixBackupOverdue"], ["ticket", "InformixLogBackupStalled"], ["ticket", "InformixLockWaits"]],
+      cmds: { aix: null, linux: "su - informix\nonstat -\nonstat -l      # logical logs: U used, B backed up, C current\nonstat -x      # open transactions\nonstat -d      # dbspaces and chunks\nonstat -g arc  # last archive per dbspace\nonstat -m; journalctl -p err -S -1h" } },
+    { id: "aix-collector", layer: "aix", label: "AIX collector", shape: "box", pos: [-2.3, 0.45, 0.2],
       what: "corewatch_aix.sh, a ksh script run from cron every 5 minutes. It reads the things only AIX has and writes them to a .prom file.",
       metrics: ["aix_errpt_entries{type,class}", "aix_vg_stale_pps{vg}", "aix_mpio_paths{status}", "aix_paging_space_used_ratio", "aix_filesystem_used_ratio{mountpoint}", "aix_mksysb_age_seconds", "aix_oslevel_info{oslevel}"],
       alerts: [["page", "AixHardwareError"], ["page", "AixDiskPathNotEnabled"], ["page", "AixFilesystemFull"], ["ticket", "AixStalePartitions"], ["ticket", "AixPagingSpaceHigh"], ["ticket", "AixMksysbTooOld"]],
       cmds: { aix: "errpt | head -20\nerrpt -a -j IDENTIFIER\nlsvg -o; lsvg rootvg\nlspath\nlsps -s\noslevel -s", linux: null } },
-    { id: "aix-jobs", layer: "jobs", label: "Batch jobs", shape: "box", pos: [-2.6, 0.45, 3.4],
+    { id: "aix-jobs", layer: "jobs", label: "Batch jobs", shape: "box", pos: [-2.3, 0.45, 3.4],
       what: "Each scheduled command runs through corewatch_job.sh, which records how it went. The same wrapper file runs on AIX and Linux.",
       metrics: ["corewatch_job_last_exit_code{job_name}", "corewatch_job_last_success_seconds", "corewatch_job_last_duration_seconds", "corewatch_job_running", "corewatch_job_max_age_seconds"],
       alerts: [["page", "JobFailed"], ["page", "JobOverdue"], ["ticket", "JobRunningLong"]],
       cmds: { aix: "crontab -l\ncat /var/lib/corewatch/job_NAME.prom\ncorewatch_job.sh NAME --max-age 93600 -- CMD", linux: null } },
-    { id: "aix-textfile", layer: "aix", label: "Textfile server :9954", shape: "box", pos: [-5.6, 0.45, 3.4],
+    { id: "aix-textfile", layer: "aix", label: "Textfile server :9954", shape: "box", pos: [-6.3, 0.45, 3.8],
       what: "A 60-line Python server that hands the .prom files to Prometheus. It needs only the python3 from the AIX Toolbox. Where node_exporter runs on AIX, use its textfile collector and skip this.",
       metrics: ["corewatch_textfile_age_seconds{file}"],
       alerts: [["page", "HostDown"], ["ticket", "TextfileStale"], ["ticket", "AixCollectorStale"]],
       cmds: { aix: "python3 textfile_server.py --dir /var/lib/corewatch --port 9954\nnetstat -Aan | grep 9954", linux: null } },
-    { id: "linux-collector", layer: "linux", label: "Linux collector", shape: "box", pos: [2.6, 0.45, 0.6],
+    { id: "linux-collector", layer: "linux", label: "Linux collector", shape: "box", pos: [2.3, 0.45, 0.2],
       what: "corewatch_linux.sh, a bash script run from cron. It adds what node_exporter leaves out: patch status, a pending reboot, and multipath path health.",
       metrics: ["linux_reboot_required", "linux_security_updates_pending", "linux_multipath_paths{state}", "linux_os_info{id,version,kernel}"],
       alerts: [["page", "LinuxMultipathFailed"], ["ticket", "LinuxRebootPending"], ["ticket", "LinuxSecurityUpdatesWaiting"], ["ticket", "LinuxCollectorStale"]],
       cmds: { aix: null, linux: "needs-restarting -r\ndnf updateinfo list --security --updates\nmultipath -ll\ncat /etc/os-release" } },
-    { id: "linux-jobs", layer: "jobs", label: "Batch jobs", shape: "box", pos: [2.6, 0.45, 3.4],
+    { id: "linux-jobs", layer: "jobs", label: "Batch jobs", shape: "box", pos: [2.3, 0.45, 3.4],
       what: "Each scheduled command runs through corewatch_job.sh, which records how it went. The same wrapper file runs on AIX and Linux.",
       metrics: ["corewatch_job_last_exit_code{job_name}", "corewatch_job_last_success_seconds", "corewatch_job_last_duration_seconds", "corewatch_job_running", "corewatch_job_max_age_seconds"],
       alerts: [["page", "JobFailed"], ["page", "JobOverdue"], ["ticket", "JobRunningLong"]],
       cmds: { aix: null, linux: "crontab -l\ncat /var/lib/corewatch/job_NAME.prom\ncorewatch_job.sh NAME --max-age 93600 -- CMD" } },
-    { id: "node-exporter", layer: "linux", label: "node_exporter :9100", shape: "box", pos: [5.6, 0.45, 3.4],
+    { id: "node-exporter", layer: "linux", label: "node_exporter :9100", shape: "box", pos: [6.3, 0.45, 3.8],
       what: "The standard Prometheus host exporter. It reports CPU, memory, disks and filesystems, and serves the corewatch .prom files through its textfile collector.",
       metrics: ["node_filesystem_avail_bytes", "node_memory_MemAvailable_bytes", "node_cpu_seconds_total", "node_memory_SwapFree_bytes"],
       alerts: [["page", "HostDown"], ["page", "LinuxFilesystemFull"], ["ticket", "LinuxFilesystemNearlyFull"], ["ticket", "LinuxFilesystemFillsWithinFourHours"], ["ticket", "LinuxSwapHigh"]],
       cmds: { aix: null, linux: "systemctl status node_exporter\ncurl -s localhost:9100/metrics | grep corewatch\ndf -h; free -h" } },
-    { id: "exporter", layer: "db2", label: "corewatch-db2 :9953", shape: "box", pos: [0, 3.5, 0.3],
-      what: "The Db2 exporter. One process watches many databases and stamps each metric with the client and environment labels from its config. Every query is independent, so one that fails on an older Db2 level does not stop the rest.",
-      metrics: ["db2_up", "db2_query_success{query}", "db2_scrape_duration_seconds"],
-      alerts: [["page", "Db2ExporterDown"], ["ticket", "Db2QueryFailing"]],
-      cmds: { aix: "corewatch-db2 --config config.yml\ncurl -s localhost:9953/metrics | grep db2_query_success", linux: "corewatch-db2 --config config.yml\ncurl -s localhost:9953/metrics | grep db2_query_success" } },
-    { id: "blackbox", layer: "mon", label: "blackbox probe", shape: "box", pos: [0, 3.5, 3.7],
-      what: "Checks from the outside. It opens a TCP connection to each Db2 port and can read a TLS certificate's expiry date. It catches the case where Db2 is healthy but nothing can reach it.",
-      metrics: ["probe_success", "probe_duration_seconds", "probe_ssl_earliest_cert_expiry"],
-      alerts: [["page", "Db2PortUnreachable"]],
-      cmds: { aix: "db2 get dbm cfg | grep -i SVCENAME\ndb2set DB2COMM\nnetstat -Aan | grep 50000", linux: "db2 get dbm cfg | grep -i SVCENAME\ndb2set DB2COMM\nss -tlnp | grep 50000" } },
+    { id: "exporter", layer: "mon", label: "corewatch-exporter :9953", shape: "box", pos: [0, 3.5, 0.3],
+      what: "The database exporter, for Db2 and Informix. One process watches many targets of both engines through one driver (Db2 natively, Informix over DRDA) and stamps each metric with the client and environment labels from its config. Every query is independent, so one that fails on an older release does not stop the rest.",
+      metrics: ["db2_up", "informix_up", "db2_query_success{query}", "informix_query_success{query}", "corewatch_engine_enabled{engine}"],
+      alerts: [["page", "CorewatchExporterDown"], ["ticket", "Db2QueryFailing"], ["ticket", "InformixQueryFailing"]],
+      cmds: { aix: "corewatch-exporter --config config.yml\ncurl -s localhost:9953/metrics | grep _query_success", linux: "corewatch-exporter --config config.yml\ncurl -s localhost:9953/metrics | grep _query_success" } },
+    { id: "blackbox", layer: "mon", label: "blackbox probe", shape: "box", pos: [0, 0.45, -1.6],
+      what: "Checks from the outside. It opens a TCP connection to each Db2 and Informix listener and can read a TLS certificate's expiry date. It catches the case where the database is healthy but nothing can reach it. Port alerts only fire for an engine the exporter is configured to monitor.",
+      metrics: ["probe_success{engine}", "probe_duration_seconds", "probe_ssl_earliest_cert_expiry"],
+      alerts: [["page", "Db2PortUnreachable"], ["page", "InformixPortUnreachable"]],
+      cmds: { aix: "db2 get dbm cfg | grep -i SVCENAME\nonstat -g ntt\nnetstat -Aan | grep -E '50000|9088'", linux: "db2 get dbm cfg | grep -i SVCENAME\nonstat -g ntt\nss -tlnp | grep -E '50000|9088'" } },
     { id: "prometheus", layer: "mon", label: "Prometheus", shape: "box", pos: [0, 6.4, 2], big: true,
-      what: "Scrapes every exporter each 15 seconds, stores the series, and evaluates 42 alert rules. The rules have unit tests, run with promtool in CI.",
+      what: "Scrapes every exporter each 15 seconds, stores the series, and evaluates 62 alert rules. The rules have unit tests, run with promtool in CI.",
       metrics: ["up{job}", "ALERTS{alertstate,severity}"],
       alerts: [],
       cmds: { aix: "promtool check rules prometheus/rules/*.yml\npromtool test rules tests/rules_test.yml", linux: "promtool check rules prometheus/rules/*.yml\npromtool test rules tests/rules_test.yml" } },
     { id: "alertmanager", layer: "mon", label: "Alertmanager", shape: "box", pos: [-3.6, 6.4, 2],
-      what: "Groups and routes alerts. Two severities only: a page is a member-facing outage or one that is close, a ticket waits for business hours. When a database is down, its other alerts are held back.",
+      what: "Groups and routes alerts. Two severities only: a page is a member-facing outage or one that is close, a ticket waits for business hours. When a Db2 database or an Informix server is down, its other alerts are held back.",
       metrics: [],
       alerts: [],
       cmds: { aix: "amtool check-config alertmanager/alertmanager.yml", linux: "amtool check-config alertmanager/alertmanager.yml" } },
@@ -288,22 +326,23 @@ td code { white-space: nowrap; }
       metrics: [], alerts: [],
       cmds: { aix: "docs/runbooks.md", linux: "docs/runbooks.md" } },
     { id: "grafana", layer: "mon", label: "Grafana", shape: "box", pos: [3.6, 6.4, 2],
-      what: "One dashboard with a row per layer: Db2, batch jobs, AIX hosts, Linux hosts. A database selector at the top filters the Db2 row.",
+      what: "One dashboard: an estate overview, then a row per layer: Db2, Informix, batch jobs, AIX hosts, Linux hosts. Selectors at the top filter the Db2 row by database and the Informix row by server. Every panel explains itself on hover.",
       metrics: [], alerts: [],
       cmds: { aix: "grafana/dashboards/corewatch.json", linux: "grafana/dashboards/corewatch.json" } }
   ];
   var EDGES = [
     ["db2-aix", "exporter"], ["db2-linux", "exporter"], ["db2-aix", "blackbox"], ["db2-linux", "blackbox"],
+    ["ifx-aix", "exporter"], ["ifx-linux", "exporter"], ["ifx-aix", "blackbox"], ["ifx-linux", "blackbox"],
     ["aix-collector", "aix-textfile"], ["aix-jobs", "aix-textfile"],
     ["linux-collector", "node-exporter"], ["linux-jobs", "node-exporter"],
     ["exporter", "prometheus"], ["blackbox", "prometheus"], ["aix-textfile", "prometheus"], ["node-exporter", "prometheus"],
     ["prometheus", "alertmanager"], ["alertmanager", "oncall"], ["prometheus", "grafana"]
   ];
   var SLABS = [
-    { label: "AIX on IBM Power", layer: "aix", x: -4.1, z: 2, w: 5.4, d: 4.8 },
-    { label: "RHEL on x86-64 or Power", layer: "linux", x: 4.1, z: 2, w: 5.4, d: 4.8 }
+    { label: "AIX on IBM Power", layer: "aix", x: -4.3, z: 1.4, w: 6.4, d: 6.8 },
+    { label: "RHEL on x86-64 or Power", layer: "linux", x: 4.3, z: 1.4, w: 6.4, d: 6.8 }
   ];
-  var LAYER_NAMES = { db2: "Db2", aix: "AIX", linux: "Linux", jobs: "Batch jobs", mon: "Monitoring" };
+  var LAYER_NAMES = { db2: "Db2", ifx: "Informix", aix: "AIX", linux: "Linux", jobs: "Batch jobs", mon: "Monitoring" };
   var byId = {};
   NODES.forEach(function (n) { byId[n.id] = n; });
 
@@ -471,8 +510,8 @@ td code { white-space: nowrap; }
     };
 
     // orbit
-    var target = new THREE.Vector3(-0.6, 3.0, 2);
-    var theta0 = 0, theta = 0.2, phi = 1.02, radius = 25, clock = 0;
+    var target = new THREE.Vector3(-0.6, 3.0, 1.4);
+    var theta0 = 0, theta = 0.2, phi = 0.9, radius = 25, clock = 0;
     function placeCamera() {
       camera.position.set(target.x + radius * Math.sin(phi) * Math.sin(theta), target.y + radius * Math.cos(phi), target.z + radius * Math.sin(phi) * Math.cos(theta));
       camera.lookAt(target);
@@ -543,7 +582,7 @@ td code { white-space: nowrap; }
     if (!still) requestAnimationFrame(frame);
   }
 
-  // deep links: #db2, #aix, #linux, #jobs
+  // deep links: #db2, #ifx, #aix, #linux, #jobs
   var h = (location.hash || "").replace("#", "");
   if (LAYER_NAMES[h]) setFilter(h);
 })();

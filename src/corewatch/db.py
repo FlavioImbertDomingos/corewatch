@@ -1,4 +1,8 @@
-"""A thin wrapper around ibm_db so the collector can be tested without Db2."""
+"""A thin wrapper around ibm_db so the collector can be tested without a database.
+
+ibm_db speaks DRDA, which Db2 uses natively and Informix accepts on its DRDA
+listener (drsoctcp), so one driver covers both engines.
+"""
 
 from __future__ import annotations
 
